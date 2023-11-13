@@ -1,38 +1,41 @@
-
-# Create your models here.
+from django.contrib.auth.models import User
 from django.db import models
 
-class User(models.Model):
-    # Define user fields
-    username = models.CharField(max_length=50, unique=True)
-    email = models.EmailField(unique=True)
-    passwordHash = models.CharField(max_length=256)
-    dateJoined = models.DateTimeField(auto_now_add=True)
-
 class Word(models.Model):
-    # Define word fields
-    word = models.CharField(max_length=100)
+    word = models.CharField(max_length=100, unique=True)
     pronunciation = models.CharField(max_length=100)
 
+    def __str__(self):
+        return self.word
+
 class Definition(models.Model):
-    # Define definition fields
     word = models.ForeignKey(Word, on_delete=models.CASCADE)
     definition = models.TextField()
-    partOfSpeech = models.CharField(max_length=50)
-    usageExample = models.TextField()
+    part_of_speech = models.CharField(max_length=50)
+    usage_example = models.TextField()
 
-class Progress(models.Model):
-    # Define progress fields
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    word = models.ForeignKey(Word, on_delete=models.CASCADE)
-    proficiencyLevel = models.IntegerField(default=0)
-    nextReviewDate = models.DateField()
-    lastEncounter = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return f"{self.word}: {self.definition}"
+    
 
 class Session(models.Model):
-    # Define session fields
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    startTime = models.DateTimeField()
-    endTime = models.DateTimeField()
-    sessionDate = models.DateField()
-    sessionType = models.CharField(max_length=50)  # E.g., 'learning' or 'review'
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    session_date = models.DateField(auto_now_add=True)
+    session_type = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.user.username} - Session on {self.session_date}"
+
+class Progress(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    word = models.ForeignKey(Word, on_delete=models.CASCADE)
+    proficiency_level = models.IntegerField()
+    next_review_date = models.DateField()
+    last_encounter = models.ForeignKey(Session, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.word}"
+
+
