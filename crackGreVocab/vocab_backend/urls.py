@@ -14,7 +14,7 @@ urlpatterns = [
     path('user/progress', UserProgressView.as_view(), name='user-progress'),
     path('review-words/', ReviewWordsView.as_view(), name='review_words'),
     path('update-progress/', UpdateProgressView.as_view(), name='update_progress'),
-    path('/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     # Additional app-specific URL patterns...
 ]

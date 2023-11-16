@@ -22,7 +22,7 @@ const Flashcard = ({ wordId, word, pronunciation, definitions, onUserResponse })
       <button onClick={() => handleResponse('remember')}>Remember</button>
       <button onClick={() => handleResponse('forget')}>Forget</button>
       <button onClick={nextDefinition}>Next Definition</button>
-    </div>
+    </div> 
   );
 };
 

@@ -12,14 +12,15 @@ const Login = ({ onLoginSuccess }) => {
       username,
       password,
     });
-
-    if (response.token) {
-      localStorage.setItem('token', response.token);
+  
+    if (response.access) {
+      localStorage.setItem('token', response.access);
+      localStorage.setItem('refreshToken', response.refresh);
       onLoginSuccess();
     } else {
       alert('Invalid credentials');
     }
-  };
+  }; 
 
   return (
     <form onSubmit={handleSubmit}>
@@ -47,15 +48,24 @@ const Login = ({ onLoginSuccess }) => {
 };
 
 async function loginUser(credentials) {
-  return fetch(`${process.env.NEXT_PUBLIC_API_URL}/vocab/token/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(credentials),
-  })
-    .then((data) => data.json())
-    .catch(() => ({ error: 'Network error' }));
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/vocab/token/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Login failed');
+    }
+    return data;
+  } catch (error) {
+    console.error('Login error:', error.message);
+    return { error: error.message };
+  }
 }
+
 
 export default Login;
