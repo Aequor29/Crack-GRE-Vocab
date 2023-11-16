@@ -1,4 +1,3 @@
-// Use client directive at the top of the file
 'use client';
 
 import React from 'react';
@@ -9,7 +8,7 @@ const LoginPage = () => {
   const router = useRouter();
 
   const handleLoginSuccess = () => {
-    router.push('/dashboard'); // Replace '/dashboard' with your post-login route
+    router.push('/dashboard');
   };
 
   return (

@@ -130,3 +130,15 @@ class UserProgressView(APIView):
         # Logic to compile and return progress data
         progress_serializer = ProgressSerializer(progress_data, many=True)
         return Response(progress_serializer.data)
+    
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        user = request.user
+        user_data = {
+            'username': user.username,
+            'email': user.email
+        }
+        return Response(user_data)
+

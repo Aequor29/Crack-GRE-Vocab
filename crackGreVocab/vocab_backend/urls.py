@@ -1,7 +1,7 @@
 # vocab/urls.py
 
 from django.urls import path
-from .views import NewWordsView, WordResponseView, UserProgressView, ReviewWordsView , UpdateProgressView
+from .views import NewWordsView, WordResponseView, UserProgressView, ReviewWordsView , UpdateProgressView, UserProfileView
 from django.urls import path
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -9,6 +9,7 @@ from rest_framework_simplejwt.views import (
 )
 
 urlpatterns = [
+    path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('words/new', NewWordsView.as_view(), name='new-words'),
     path('words/response', WordResponseView.as_view(), name='word-response'),
     path('user/progress', UserProgressView.as_view(), name='user-progress'),
