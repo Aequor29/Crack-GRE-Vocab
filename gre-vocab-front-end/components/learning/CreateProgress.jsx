@@ -30,7 +30,7 @@ const CreateProgress = ({ wordId, response }) => {
     }
   }, [wordId, response]);
 
-  return null; // This component does not render anything
+  return null;
 };
 
 export default CreateProgress;
