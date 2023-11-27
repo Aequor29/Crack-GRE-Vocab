@@ -11,8 +11,21 @@ from .serializers import WordSerializer, ProgressSerializer
 from rest_framework import status
 from datetime import timedelta
 
+class SessionCreateView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request, format=None):
+        user = request.user
+        session_type = request.data.get('session_type')
 
+        new_session = Session.objects.create(
+            user=user,
+            start_time=timezone.now(),
+            end_time=timezone.now(),  # Initially set to None, can be updated later
+            session_type=session_type
+        )
+        return Response({'session_id': new_session.id}, status=status.HTTP_201_CREATED)
+    
 class NewWordsView(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils.timezone import now
 
 class Word(models.Model):
     word = models.CharField(max_length=100, unique=True)
@@ -21,7 +22,7 @@ class Definition(models.Model):
 class Session(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     start_time = models.DateTimeField()
-    end_time = models.DateTimeField()
+    end_time = models.DateTimeField(default=now)
     session_date = models.DateField(auto_now_add=True)
     session_type = models.CharField(max_length=100)
 
