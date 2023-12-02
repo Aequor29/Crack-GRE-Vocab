@@ -6,12 +6,14 @@ import axios from 'axios';
 const NewWords = ({ onUserResponse }) => {
   const [words, setWords] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [sessionId, setSessionId] = useState(null);
 
   useEffect(() => {
     const startNewSession = async () => {
-        const sessionId = await initializeSession();
-        if (sessionId) {
-          fetchNewWords();  
+        let id = await initializeSession();
+        console.log("Session ID:", id);
+        if (id) {
+          fetchNewWords(); 
         }
     };
     startNewSession();
@@ -28,6 +30,7 @@ const NewWords = ({ onUserResponse }) => {
           'Authorization': `Bearer ${token}`
           }
         });
+        setSessionId(response.data.session_id);
         return response.data.session_id;
     } catch (error) {
         console.error('Error initializing session:', error);
@@ -72,9 +75,10 @@ const NewWords = ({ onUserResponse }) => {
           word={words[currentIndex].word}
           pronunciation={words[currentIndex].pronunciation}
           definitions={words[currentIndex].definitions}
-          onUserResponse={(wordId, response) => {
+          sessionID={sessionId}
+          onUserResponse={(wordId,response,sessionID) => {
             console.log('Current word ID:', wordId, 'Response:', response);
-            onUserResponse(wordId, response);
+            onUserResponse(wordId, response, sessionID);
             nextWord();
           }}
         />

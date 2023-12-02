@@ -46,7 +46,7 @@ class WordResponseView(APIView):
         user = request.user
         word_id = request.data.get('word_id')
         response = request.data.get('response')  # 'remember' or 'forget'
-        session_id = request.data.get('session_id')  # assuming session ID is sent in the request
+        session_id = request.data.get('session_id')  
 
         try:
             word = Word.objects.get(id=word_id)

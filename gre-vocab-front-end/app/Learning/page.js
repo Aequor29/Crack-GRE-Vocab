@@ -8,11 +8,11 @@ const LearningSessionPage = () => {
   const [response, setResponse] = useState(null);
   const [sessionID, setSessionID] = useState(null);
 
-  const handleUserResponse = (id, userResponse, session_id) => {
-    console.log('LearningSessionPage handleUserResponse:', id, userResponse);
+  const handleUserResponse = (id, userResponse, sessionID) => {
+    console.log('LearningSessionPage handleUserResponse:', id, userResponse, sessionID);
     setWordId(id);
     setResponse(userResponse);
-    setSessionID(session_id);
+    setSessionID(sessionID);
   };
 
   const resetProgress = () => {

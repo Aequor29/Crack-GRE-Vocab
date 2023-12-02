@@ -12,7 +12,7 @@ const CreateProgress = ({ wordId, response, session_id,onProgressUpdated }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ wordId, response,session_id })
+        body: JSON.stringify({ word_id: wordId, response: response, session_id: session_id })
       });
   
       if (!apiResponse.ok) {

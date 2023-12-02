@@ -1,7 +1,7 @@
 "use client"
 import React, { useState } from 'react';
 
-const Flashcard = ({ wordId, word, pronunciation, definitions, onUserResponse }) => {
+const Flashcard = ({ wordId, sessionID,word,pronunciation, definitions, onUserResponse }) => {
   const [currentDefinitionIndex, setCurrentDefinitionIndex] = useState(0);
 
   const nextDefinition = () => {
@@ -12,7 +12,7 @@ const Flashcard = ({ wordId, word, pronunciation, definitions, onUserResponse })
 
   const handleResponse = (userResponse) => {
     console.log("User response:", userResponse);
-    onUserResponse(wordId, userResponse);
+    onUserResponse(wordId,userResponse, sessionID);
   };
   
 
