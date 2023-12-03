@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import React from 'react';
-import Login from '@/components/login/Login';
-import { useRouter } from 'next/navigation';
+import React from "react";
+import Login from "@/components/login/Login";
+import { useRouter } from "next/navigation";
 
 const LoginPage = () => {
   const router = useRouter();
 
   const handleLoginSuccess = () => {
-    router.push('/dashboard');
+    router.push("/dashboard");
   };
 
   return (
@@ -20,5 +20,3 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
-
-
