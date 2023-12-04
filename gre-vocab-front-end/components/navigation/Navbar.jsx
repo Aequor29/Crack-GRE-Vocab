@@ -40,15 +40,15 @@ export default function Nav() {
             Review
           </Link>
         </NavbarItem>
-        <NavbarItem isActive>
-          <Link aria-current="page" href="/dashboard">
+        <NavbarItem>
+          <Link color="foreground" href="/dashboard">
             Dashboard
           </Link>
         </NavbarItem>
       </NavbarContent>
       <NavbarContent justify="end">
         <NavbarItem className="hidden lg:flex">
-          <Link href="#">Login</Link>
+          <Link href="/Login">Login</Link>
         </NavbarItem>
         <NavbarItem>
           <Button as={Link} color="primary" href="#" variant="flat">

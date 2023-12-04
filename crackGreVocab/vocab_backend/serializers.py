@@ -11,7 +11,7 @@ class WordSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Word
-        fields = ['word', 'pronunciation', 'definitions']
+        fields = ['id','word', 'pronunciation', 'definitions']
     
 class ProgressSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,19 +1,19 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 
-const CreateProgress = ({
+export default function UpdateProgress({
   wordId,
   response,
   session_id,
   onProgressUpdated,
-}) => {
-  const createProgressRecord = async () => {
+}) {
+  const updateProgressRecord = async () => {
     const token = localStorage.getItem("token");
     try {
       const apiResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/vocab/words/response`,
+        `${process.env.NEXT_PUBLIC_API_URL}/vocab/update-progress`,
         {
-          method: "POST",
+          method: "PUT",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
@@ -39,15 +39,12 @@ const CreateProgress = ({
   React.useEffect(() => {
     console.log("useEffect triggered", { wordId, response, session_id });
     if (wordId && response && session_id) {
-      createProgressRecord().then(() => {
+      updateProgressRecord().then(() => {
         if (onProgressUpdated) {
           onProgressUpdated();
         }
       });
     }
   }, [wordId, response]);
-
   return null;
-};
-
-export default CreateProgress;
+}

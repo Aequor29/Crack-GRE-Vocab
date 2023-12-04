@@ -1,9 +1,9 @@
 "use client";
 import React, { useState } from "react";
-import NewWords from "@/components/learning/NewWords";
-import CreateProgress from "@/components/learning/CreateProgress";
+import ReviewWords from "@/components/reviewing/ReviewWords";
+import UpdateProgress from "@/components/reviewing/UpdateProgress";
 
-const LearningSessionPage = () => {
+export default function reviewSessionPage() {
   const [wordId, setWordId] = useState(null);
   const [response, setResponse] = useState(null);
   const [sessionID, setSessionID] = useState(null);
@@ -27,8 +27,8 @@ const LearningSessionPage = () => {
 
   return (
     <main className="container mx-auto px-4">
-      <NewWords onUserResponse={handleUserResponse} />
-      <CreateProgress
+      <ReviewWords onUserResponse={handleUserResponse} />
+      <UpdateProgress
         wordId={wordId}
         response={response}
         session_id={sessionID}
@@ -36,6 +36,4 @@ const LearningSessionPage = () => {
       />
     </main>
   );
-};
-
-export default LearningSessionPage;
+}

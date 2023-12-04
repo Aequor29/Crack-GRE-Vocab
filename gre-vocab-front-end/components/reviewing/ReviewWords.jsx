@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import Flashcard from "@/components/flashcard/Flashcard";
 import axios from "axios";
 
-const NewWords = ({ onUserResponse }) => {
+export default function ReviewWords({ onUserResponse }) {
   const [words, setWords] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionId, setSessionId] = useState(null);
@@ -13,13 +13,13 @@ const NewWords = ({ onUserResponse }) => {
       let id = await initializeSession();
       console.log("Session ID:", id);
       if (id) {
-        fetchNewWords();
+        fetchWords();
       }
     };
     startNewSession();
-  }, []); // Empty dependency array ensures this runs once on component mount
+  }, []);
 
-  const initializeSession = async (sessionType = "learning") => {
+  const initializeSession = async (sessionType = "reviewing") => {
     const token = localStorage.getItem("token");
     try {
       const response = await axios.post(
@@ -41,10 +41,10 @@ const NewWords = ({ onUserResponse }) => {
     }
   };
 
-  const fetchNewWords = async () => {
+  const fetchWords = async () => {
     const token = localStorage.getItem("token");
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/vocab/words/new`,
+      `${process.env.NEXT_PUBLIC_API_URL}/vocab/review-words`,
       {
         method: "GET",
         headers: {
@@ -55,7 +55,7 @@ const NewWords = ({ onUserResponse }) => {
     );
     if (response.ok) {
       const data = await response.json();
-      console.log("New words:", data);
+      console.log("words for reivew:", data);
       setWords(data);
     } else {
       // Handle errors
@@ -89,6 +89,4 @@ const NewWords = ({ onUserResponse }) => {
       )}
     </div>
   );
-};
-
-export default NewWords;
+}
