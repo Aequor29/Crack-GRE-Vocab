@@ -42,7 +42,7 @@ const Login = ({ onLoginSuccess }) => {
       />
 
       <br />
-      <Button color="default" type="submit">
+      <Button variant="flat" color="default" type="submit">
         Login
       </Button>
     </form>

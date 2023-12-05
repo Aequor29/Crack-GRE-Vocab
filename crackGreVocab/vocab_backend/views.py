@@ -10,6 +10,11 @@ from django.utils import timezone
 from .serializers import WordSerializer, ProgressSerializer
 from rest_framework import status
 from datetime import timedelta
+from django.contrib.auth.models import User
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken  # Import this
+
+
 
 class SessionCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -155,3 +160,25 @@ class UserProfileView(APIView):
         }
         return Response(user_data)
 
+class UserCreate(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+        email = request.data.get('email')
+        if not all([username, password, email]):
+            return Response({'error': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(username=username).exists():
+            return Response({'error': 'Username already taken'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.create_user(username=username, password=password, email=email)
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user_id': user.id,
+            'username': user.username,
+        }, status=status.HTTP_201_CREATED)
