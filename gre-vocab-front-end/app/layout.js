@@ -12,9 +12,9 @@ const inter = Inter({ subsets: ["latin"] });
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body
-        className={`${inter.className} prose prose-neutral w-full max-w-full`}
+        className={`${inter.className} prose prose-neutral dark:prose-invert w-full max-w-full`}
       >
         <Providers>
           <Nav />

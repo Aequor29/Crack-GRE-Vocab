@@ -15,7 +15,7 @@ import React from "react";
 export default function Nav() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
-  const menuItems = ["Dashboard", "Laarn", "Review", "Log Out"];
+  const menuItems = ["Dashboard", "Laarn", "Review"];
 
   return (
     <Navbar onMenuOpenChange={setIsMenuOpen}>

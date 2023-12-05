@@ -35,7 +35,7 @@ const Flashcard = ({
   }
 
   return (
-    <div className="flex flex-col justify-center items-center my-4">
+    <div className="flex flex-col justify-center items-center my-5">
       <div
         className={`flashcard ${isFlipped ? "is-flipped" : ""}`}
         onClick={handleClick}
@@ -45,17 +45,37 @@ const Flashcard = ({
             {word} {pronunciation && `(${pronunciation})`}
           </h2>
         </div>
-        <div className="card-back">
-          <h2 className="text-primary">
-            {definitions[currentDefinitionIndex].part_of_speech}
-          </h2>
-          <p>{definitions[currentDefinitionIndex].definition}</p>
+        <div className="card-back relative h-full">
+          <div className="p-5">
+            <h3 className="text-primary mb-2">
+              {definitions[currentDefinitionIndex].part_of_speech}
+            </h3>
+            <p>{definitions[currentDefinitionIndex].definition}</p>
+          </div>
+          <Button
+            variant="flat"
+            className="absolute bottom-2 left-1/2 transform -translate-x-1/2"
+            onClick={nextDefinition}
+          >
+            Next Definition
+          </Button>
         </div>
       </div>
-      <div className="buttons flex justify-center mt-4 gap-5">
-        <Button onClick={() => handleResponse("remember")}>Remember</Button>
-        <Button onClick={() => handleResponse("forget")}>Forgot</Button>
-        <Button onClick={nextDefinition}>Next Definition</Button>
+      <div className="flex justify-center mt-4 gap-5">
+        <Button
+          color="success"
+          variant="flat"
+          onClick={() => handleResponse("remember")}
+        >
+          Remember
+        </Button>
+        <Button
+          color="danger"
+          variant="flat"
+          onClick={() => handleResponse("forget")}
+        >
+          Forgot
+        </Button>
       </div>
     </div>
   );
