@@ -3,7 +3,7 @@ import { Button } from "@nextui-org/button";
 export default function DashBoardPage() {
   return (
     <div className="flex flex-col justify-center items-center my-4">
-      <h1>Dashboard</h1>
+      <h2>Dashboard</h2>
       <div>
         <Card>
           <CardBody>
