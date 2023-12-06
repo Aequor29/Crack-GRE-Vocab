@@ -14,9 +14,12 @@
     "@nextui-org/input": "^2.1.16",
     "@nextui-org/react": "^2.2.9",
     "axios": "^1.6.2",
+    "chart.js": "^4.4.1",
     "framer-motion": "^10.16.12",
     "next": "^14.0.2",
+    "next-themes": "^0.2.1",
     "react": "^18",
+    "react-chartjs-2": "^5.2.0",
     "react-dom": "^18"
   },
   "devDependencies": {

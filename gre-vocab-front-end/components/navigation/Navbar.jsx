@@ -10,6 +10,7 @@ import {
   Button,
   Link,
 } from "@nextui-org/react";
+import ThemeSwitch from "@/components/themeSwitch";
 import React from "react";
 
 export default function Nav() {
@@ -36,7 +37,7 @@ export default function Nav() {
           </Link>
         </NavbarItem>
         <NavbarItem>
-          <Link href="/Reviewing" color="foreground">
+          <Link color="foreground" href="/Reviewing">
             Review
           </Link>
         </NavbarItem>
@@ -47,6 +48,9 @@ export default function Nav() {
         </NavbarItem>
       </NavbarContent>
       <NavbarContent justify="end">
+        <NavbarItem className="hidden lg:flex">
+          <ThemeSwitch />
+        </NavbarItem>
         <NavbarItem className="hidden lg:flex">
           <Link href="/SignUp">Sign Up</Link>
         </NavbarItem>

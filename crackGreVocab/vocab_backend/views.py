@@ -144,10 +144,46 @@ class UserProgressView(APIView):
     
     def get(self, request, format=None):
         user = request.user
+
+        # Get the total number of words in the system
+        total_words_count = Word.objects.count()
+
+        # Get the user's progress data
         progress_data = Progress.objects.filter(user=user)
-        # Logic to compile and return progress data
-        progress_serializer = ProgressSerializer(progress_data, many=True)
-        return Response(progress_serializer.data)
+        learned_words_count = progress_data.count()  # Number of words the user has encountered
+
+        # Count how many words are remembered well (proficiency level > 6)
+        well_remembered_words_count = progress_data.filter(proficiency_level__gt=6).count()
+
+        # Prepare the aggregate data
+        aggregate_data = {
+            'total_words_count': total_words_count,
+            'learned_words_count': learned_words_count,
+            'well_remembered_words_count': well_remembered_words_count,
+        }
+
+        return Response(aggregate_data)
+
+class SessionProgressView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        user = request.user
+        word_ids = request.data.get('word_ids', [])
+
+
+        if not word_ids:
+            return Response({'error': 'No word IDs provided'}, status=400)
+
+        # Filter Progress objects for the given user and word IDs
+        progress_data = Progress.objects.filter(
+            user=user,
+            word_id__in=word_ids
+        )
+        serializer = ProgressSerializer(progress_data, many=True)
+        return Response(serializer.data)
+    
+
     
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -156,7 +192,6 @@ class UserProfileView(APIView):
         user = request.user
         user_data = {
             'username': user.username,
-            'email': user.email
         }
         return Response(user_data)
 

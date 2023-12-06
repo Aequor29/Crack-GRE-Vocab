@@ -1,7 +1,7 @@
 # vocab/urls.py
 
 from django.urls import path
-from .views import UserCreate,SessionCreateView,NewWordsView, WordResponseView, UserProgressView, ReviewWordsView , UpdateProgressView, UserProfileView
+from .views import SessionProgressView, UserCreate,SessionCreateView,NewWordsView, WordResponseView, UserProgressView, ReviewWordsView , UpdateProgressView, UserProfileView
 from django.urls import path
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -19,6 +19,7 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('session/create', SessionCreateView.as_view(), name='session-create'),
     path('signup/', UserCreate.as_view(), name='account-create'),
+    path('session-progress/', SessionProgressView.as_view(), name='session-progress'),
 
     # Additional app-specific URL patterns...
 ]

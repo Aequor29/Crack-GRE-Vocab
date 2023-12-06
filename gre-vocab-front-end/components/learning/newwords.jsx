@@ -2,11 +2,14 @@
 import React, { useState, useEffect } from "react";
 import Flashcard from "@/components/flashcard/Flashcard";
 import axios from "axios";
+import { useRouter } from "next/navigation";
 
 const NewWords = ({ onUserResponse }) => {
   const [words, setWords] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionId, setSessionId] = useState(null);
+
+  const router = useRouter();
 
   useEffect(() => {
     const startNewSession = async () => {
@@ -64,10 +67,46 @@ const NewWords = ({ onUserResponse }) => {
     }
   };
 
+  const fetchSessionProgress = async (wordIds) => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/vocab/session-progress/`,
+        { word_ids: wordIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return response.data; // The progress data
+    } catch (error) {
+      console.error("Error fetching session progress:", error);
+      return null;
+    }
+  };
+
   const nextWord = () => {
     setCurrentIndex((prevIndex) =>
       prevIndex === words.length - 1 ? 0 : prevIndex + 1
     );
+  };
+
+  const handleUserResponse = async (wordId, response, sessionID) => {
+    console.log("Current word ID:", wordId, "Response:", response);
+    await onUserResponse(wordId, response, sessionID); // Assuming this updates the proficiency level
+
+    // Fetch updated proficiency levels
+    const proficiencyData = await fetchSessionProgress(words.map((w) => w.id));
+    const allWordsProficient = proficiencyData.every(
+      (item) => item.proficiencyLevel > 3
+    );
+
+    if (allWordsProficient) {
+      alert(
+        "Congratulations! You have learned all the words for this session!"
+      );
+      router.push("/dashboard");
+      // End session logic here (e.g., navigate to a different page or show a message)
+    } else {
+      nextWord();
+    }
   };
 
   return (
@@ -80,11 +119,7 @@ const NewWords = ({ onUserResponse }) => {
           pronunciation={words[currentIndex].pronunciation}
           definitions={words[currentIndex].definitions}
           sessionID={sessionId}
-          onUserResponse={(wordId, response, sessionID) => {
-            console.log("Current word ID:", wordId, "Response:", response);
-            onUserResponse(wordId, response, sessionID);
-            nextWord();
-          }}
+          onUserResponse={handleUserResponse}
         />
       )}
     </div>
