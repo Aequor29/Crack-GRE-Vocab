@@ -8,6 +8,7 @@ export default function ReviewWords({ onUserResponse }) {
   const [words, setWords] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionId, setSessionId] = useState(null);
+  const [finished, setFinished] = useState(false);
 
   const router = useRouter();
 
@@ -70,33 +71,26 @@ export default function ReviewWords({ onUserResponse }) {
   const fetchSessionProgress = async (wordIds) => {
     const token = localStorage.getItem("token");
     try {
-      const response = await axios.post(
+      const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/vocab/session-progress/`,
-        { word_ids: wordIds },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            word_ids: wordIds,
+            session_id: sessionId,
+          }),
+        }
       );
-      return response.data; // The progress data
+      const data = await response.json();
+
+      return data; // The progress data
     } catch (error) {
       console.error("Error fetching session progress:", error);
       return null;
-    }
-  };
-  const handleUserResponse = async (wordId, response, sessionID) => {
-    console.log("Current word ID:", wordId, "Response:", response);
-    await onUserResponse(wordId, response, sessionID); // Assuming this updates the proficiency level
-
-    // Fetch updated proficiency levels
-    const proficiencyData = await fetchSessionProgress(words.map((w) => w.id));
-    const allWordsProficient = proficiencyData.every(
-      (item) => item.proficiencyLevel > 4
-    );
-
-    if (allWordsProficient) {
-      alert("Congratulations! You have review all the words for this session!");
-      router.push("/dashboard");
-      // End session logic here (e.g., navigate to a different page or show a message)
-    } else {
-      nextWord();
     }
   };
 
@@ -104,6 +98,42 @@ export default function ReviewWords({ onUserResponse }) {
     setCurrentIndex((prevIndex) =>
       prevIndex === words.length - 1 ? 0 : prevIndex + 1
     );
+  };
+
+  const handleUserResponse = async (wordId, response, sessionID) => {
+    console.log("Current word ID:", wordId, "Response:", response);
+    await onUserResponse(wordId, response, sessionID);
+    // Fetch updated proficiency levels
+    let proficiencyData = await fetchSessionProgress(words.map((w) => w.id));
+    console.log("Proficiency data:", proficiencyData);
+    let allWordsProficient = false;
+    const length = Object.keys(proficiencyData).length;
+    if (length > 0) {
+      allWordsProficient = true;
+      for (let key in proficiencyData) {
+        let proficiency = proficiencyData[key].proficiency_level;
+        if (proficiency < 4) {
+          allWordsProficient = false;
+          break;
+        }
+      }
+    }
+
+    console.log("All words proficient:", allWordsProficient);
+
+    if (allWordsProficient) {
+      setFinished(true);
+
+      alert(
+        "Congratulations! You have learned all the words for this session!"
+      );
+      if (finished) {
+        router.push("/dashboard");
+      }
+      // End session logic here (e.g., navigate to a different page or show a message)
+    } else {
+      nextWord();
+    }
   };
 
   return (

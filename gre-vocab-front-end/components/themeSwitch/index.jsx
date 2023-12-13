@@ -22,7 +22,7 @@ export default function themeSwitch() {
   return (
     <div>
       <Button variant="flat" onClick={handleClick}>
-        Theme Mode
+        Dark/Light
       </Button>
     </div>
   );

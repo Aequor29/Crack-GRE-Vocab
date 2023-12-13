@@ -88,13 +88,17 @@ class ReviewWordsView(APIView):
 
     def get(self, request, format=None):
         user = request.user
-        # Fetch words where the next review date is today or has passed
-        due_for_review = Progress.objects.filter(
+        # Fetch the first 10 Progress objects where next review date is due and sorted by proficiency level
+        progress_data = Progress.objects.filter(
             user=user, 
             next_review_date__lte=timezone.now().date()
-        ).values_list('word_id', flat=True)
+        ).order_by('proficiency_level', 'next_review_date')[:10]
 
-        review_words = Word.objects.filter(id__in=due_for_review)
+        # Extract word IDs from the Progress objects
+        word_ids = [progress.word_id for progress in progress_data]
+
+        # Fetch words corresponding to the word IDs
+        review_words = Word.objects.filter(id__in=word_ids)
         serializer = WordSerializer(review_words, many=True)
         return Response(serializer.data)
     
@@ -167,7 +171,7 @@ class UserProgressView(APIView):
 class SessionProgressView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, format=None):
+    def post(self, request, format=None):
         user = request.user
         word_ids = request.data.get('word_ids', [])
 
