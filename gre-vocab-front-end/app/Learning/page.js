@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import NewWords from "@/components/learning/Newwords";
+import NewWords from "@/components/learning/NewWords";
 import CreateProgress from "@/components/learning/CreateProgress";
 import { useAuth } from "@/app/AuthContext";
 
