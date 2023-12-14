@@ -17,7 +17,7 @@ const LoginPage = () => {
 
   return (
     <div className="flex flex-col justify-center items-center my-4">
-      <h3 className="text-primary">Login</h3>
+      <h1 className="text-primary">Login</h1>
       <Login onLoginSuccess={handleLoginSuccess} />
     </div>
   );

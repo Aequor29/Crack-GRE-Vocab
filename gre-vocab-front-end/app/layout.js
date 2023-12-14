@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/navigation/Navbar";
 import { AuthProvider } from "./AuthContext";
-import Footer from "@/components/FootNote";
+import Footer from "@/components/footNote";
 
 export const metadata = {
   title: "Crack GRE Vocabulary",
