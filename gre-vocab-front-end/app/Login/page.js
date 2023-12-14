@@ -2,12 +2,16 @@
 
 import React from "react";
 import Login from "@/components/login/Login";
+import { useAuth } from "@/app/AuthContext";
 import { useRouter } from "next/navigation";
 
 const LoginPage = () => {
   const router = useRouter();
+  const { setIsLoggedIn } = useAuth();
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = async () => {
+    await setIsLoggedIn(true);
+
     router.push("/dashboard");
   };
 

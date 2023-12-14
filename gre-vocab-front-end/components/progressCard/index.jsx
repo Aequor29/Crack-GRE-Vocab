@@ -9,6 +9,11 @@ export default function ProgressCard() {
 
   const getUserName = async () => {
     const token = localStorage.getItem("token");
+    if (!token) {
+      // Token not found, user likely not logged in
+      // Handle this case as needed, for example, return null or a default value
+      return null;
+    }
     try {
       const apiResponse = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/vocab/profile/`,
@@ -34,6 +39,11 @@ export default function ProgressCard() {
 
   const getProgress = async () => {
     const token = localStorage.getItem("token");
+    if (!token) {
+      // Token not found, user likely not logged in
+      // Handle this case as needed, for example, return null or a default value
+      return null;
+    }
     try {
       const apiResponse = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/vocab/user/progress`,
@@ -66,6 +76,15 @@ export default function ProgressCard() {
       setProgress(progress);
     });
   }, []);
+
+  if (!username || !progress) {
+    // User is not logged in or data could not be fetched
+    return (
+      <div className="flex flex-col justify-center items-center my-4">
+        <h1 className="text-primary">Please login to see progress</h1>
+      </div>
+    );
+  }
 
   return (
     <div>

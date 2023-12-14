@@ -2,8 +2,10 @@
 import React, { useState } from "react";
 import NewWords from "@/components/learning/NewWords";
 import CreateProgress from "@/components/learning/CreateProgress";
+import { useAuth } from "@/app/AuthContext";
 
 const LearningSessionPage = () => {
+  const { isLoggedIn } = useAuth();
   const [wordId, setWordId] = useState(null);
   const [response, setResponse] = useState(null);
   const [sessionID, setSessionID] = useState(null);
@@ -24,6 +26,13 @@ const LearningSessionPage = () => {
     setWordId(null);
     setResponse(null);
   };
+  if (!isLoggedIn) {
+    return (
+      <main className="flex flex-col justify-center items-center my-4">
+        <h1 className="text-primary">Please login to continue</h1>
+      </main>
+    );
+  }
 
   return (
     <main className="container mx-auto px-4">

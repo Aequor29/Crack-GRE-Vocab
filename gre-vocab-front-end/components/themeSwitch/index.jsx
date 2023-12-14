@@ -3,11 +3,13 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { Button } from "@nextui-org/react";
+import { Switch } from "@nextui-org/react";
+import { MoonIcon } from "./MoonIcon";
+import { SunIcon } from "./SunIcon";
 
-export default function themeSwitch() {
+export default function ThemeSwitch() {
   const [mounted, setMounted] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
 
   useEffect(() => {
     setMounted(true);
@@ -15,15 +17,25 @@ export default function themeSwitch() {
 
   if (!mounted) return null;
 
-  const handleClick = () => {
-    setTheme(theme === "light" ? "dark" : "light");
+  const isDarkMode = resolvedTheme === "dark";
+
+  const toggleTheme = () => {
+    setTheme(isDarkMode ? "light" : "dark");
   };
 
   return (
-    <div>
-      <Button variant="flat" onClick={handleClick}>
-        Dark/Light
-      </Button>
-    </div>
+    <Switch
+      checked={isDarkMode}
+      size="lg"
+      color="secondary"
+      onChange={toggleTheme}
+      thumbIcon={({ isSelected, className }) =>
+        isSelected ? (
+          <SunIcon className={className} />
+        ) : (
+          <MoonIcon className={className} />
+        )
+      }
+    />
   );
 }

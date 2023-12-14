@@ -127,9 +127,7 @@ const NewWords = ({ onUserResponse }) => {
       alert(
         "Congratulations! You have learned all the words for this session!"
       );
-      if (finished) {
-        //router.push("/dashboard");
-      }
+      router.push("/dashboard");
       // End session logic here (e.g., navigate to a different page or show a message)
     } else {
       nextWord();

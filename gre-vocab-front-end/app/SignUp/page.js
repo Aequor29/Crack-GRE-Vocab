@@ -1,10 +1,13 @@
 "use client";
 import SignUp from "@/components/login/signUp";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/AuthContext";
 
 export default function SignUpPage() {
+  const { setIsLoggedIn } = useAuth();
   const router = useRouter();
   const handleSignupSuccess = () => {
+    setIsLoggedIn(true);
     router.push("/dashboard");
   };
 

@@ -93,10 +93,8 @@ class ReviewWordsView(APIView):
             user=user, 
             next_review_date__lte=timezone.now().date()
         ).order_by('proficiency_level', 'next_review_date')[:10]
-
         # Extract word IDs from the Progress objects
         word_ids = [progress.word_id for progress in progress_data]
-
         # Fetch words corresponding to the word IDs
         review_words = Word.objects.filter(id__in=word_ids)
         serializer = WordSerializer(review_words, many=True)

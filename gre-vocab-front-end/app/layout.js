@@ -2,6 +2,7 @@ import { Providers } from "./providers";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/navigation/Navbar";
+import { AuthProvider } from "./AuthContext";
 
 export const metadata = {
   title: "Crack GRE Vocabulary",
@@ -17,8 +18,10 @@ export default function RootLayout({ children }) {
         className={`${inter.className} prose prose-neutral dark:prose-invert w-full max-w-full`}
       >
         <Providers>
-          <Nav />
-          {children}
+          <AuthProvider>
+            <Nav />
+            {children}
+          </AuthProvider>
         </Providers>
       </body>
     </html>

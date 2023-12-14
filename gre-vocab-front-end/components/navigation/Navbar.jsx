@@ -11,74 +11,114 @@ import {
   Link,
 } from "@nextui-org/react";
 import ThemeSwitch from "@/components/themeSwitch";
-import React from "react";
+import React, { useState } from "react";
+import { useAuth } from "@/app/AuthContext";
 
 export default function Nav() {
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isLoggedIn, setIsLoggedIn } = useAuth();
 
-  const menuItems = ["Dashboard", "Laarn", "Review"];
+  const signOut = () => {
+    localStorage.removeItem("token");
+    setIsLoggedIn(false);
+  };
+
+  const menuItems = [
+    { label: "Learn", path: "/Learning" },
+    { label: "Review", path: "/Reviewing" },
+    { label: "Dashboard", path: "/dashboard" },
+  ];
 
   return (
-    <Navbar onMenuOpenChange={setIsMenuOpen}>
+    <Navbar className="shadow-md dark:shadow-dark">
       <NavbarContent>
         <NavbarMenuToggle
           aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
           className="sm:hidden"
         />
         <NavbarBrand>
+          <img src="logo.svg" alt="Logo" />
           <p className="font-bold text-inherit">Crack-GRE</p>
         </NavbarBrand>
+
+        {/* Items for larger screens */}
+        <NavbarContent className="hidden sm:flex gap-4" justify="center">
+          {menuItems.map((item, index) =>
+            !item.hiddenWhenLoggedIn || !isLoggedIn ? (
+              <NavbarItem key={index}>
+                <Link color="foreground" href={item.path}>
+                  {item.label}
+                </Link>
+              </NavbarItem>
+            ) : null
+          )}
+        </NavbarContent>
+
+        <NavbarContent justify="end">
+          <NavbarItem className=" lg:flex">
+            <ThemeSwitch />
+          </NavbarItem>
+          {!isLoggedIn ? (
+            <>
+              <NavbarItem className="hidden lg:flex">
+                <Link href="/SignUp">Sign Up</Link>
+              </NavbarItem>
+              <NavbarItem>
+                <Button as={Link} color="primary" href="/Login" variant="flat">
+                  Login
+                </Button>
+              </NavbarItem>
+            </>
+          ) : (
+            <NavbarItem>
+              <Button color="danger" onClick={signOut}>
+                Logout
+              </Button>
+            </NavbarItem>
+          )}
+        </NavbarContent>
       </NavbarContent>
 
-      <NavbarContent className="hidden sm:flex gap-4" justify="center">
-        <NavbarItem>
-          <Link color="foreground" href="/Learning">
-            Learn
-          </Link>
-        </NavbarItem>
-        <NavbarItem>
-          <Link color="foreground" href="/Reviewing">
-            Review
-          </Link>
-        </NavbarItem>
-        <NavbarItem>
-          <Link color="foreground" href="/dashboard">
-            Dashboard
-          </Link>
-        </NavbarItem>
-      </NavbarContent>
-      <NavbarContent justify="end">
-        <NavbarItem className="hidden lg:flex">
-          <ThemeSwitch />
-        </NavbarItem>
-        <NavbarItem className="hidden lg:flex">
-          <Link href="/SignUp">Sign Up</Link>
-        </NavbarItem>
-        <NavbarItem>
-          <Button as={Link} color="primary" href="/Login" variant="flat">
-            Login
-          </Button>
-        </NavbarItem>
-      </NavbarContent>
-      <NavbarMenu>
-        {menuItems.map((item, index) => (
-          <NavbarMenuItem key={`${item}-${index}`}>
+      {/* Items for the toggle menu */}
+      <NavbarMenu isOpen={isMenuOpen}>
+        {menuItems.map((item, index) =>
+          !item.hiddenWhenLoggedIn || !isLoggedIn ? (
+            <NavbarMenuItem key={index}>
+              <Link
+                href={item.path}
+                className="w-full"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {item.label}
+              </Link>
+            </NavbarMenuItem>
+          ) : null
+        )}
+        {isLoggedIn ? null : (
+          <NavbarMenuItem>
             <Link
-              color={
-                index === 2
-                  ? "primary"
-                  : index === menuItems.length - 1
-                  ? "danger"
-                  : "foreground"
-              }
+              href="/SignUp"
               className="w-full"
-              href="#"
-              size="lg"
+              onClick={() => setIsMenuOpen(false)}
             >
-              {item}
+              Sign Up
             </Link>
           </NavbarMenuItem>
-        ))}
+        )}
+        {isLoggedIn ? (
+          <NavbarMenuItem>
+            <Link
+              color="danger"
+              onClick={() => {
+                signOut();
+                setIsMenuOpen(false);
+              }}
+            >
+              Logout
+            </Link>
+          </NavbarMenuItem>
+        ) : null}
       </NavbarMenu>
     </Navbar>
   );
