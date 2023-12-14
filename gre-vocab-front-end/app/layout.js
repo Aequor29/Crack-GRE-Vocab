@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/navigation/Navbar";
 import { AuthProvider } from "./AuthContext";
+import Footer from "@/components/FootNote";
 
 export const metadata = {
   title: "Crack GRE Vocabulary",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }) {
           <AuthProvider>
             <Nav />
             {children}
+            <Footer />
           </AuthProvider>
         </Providers>
       </body>

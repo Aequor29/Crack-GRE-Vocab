@@ -134,6 +134,16 @@ export default function ReviewWords({ onUserResponse }) {
     }
   };
 
+  if (words.length === 0) {
+    return (
+      <div className="flex flex-col justify-center items-center my-4">
+        <h3 className="text-primary">
+          No words to be reivewed for Today. Yeah!!!!!
+        </h3>
+      </div>
+    );
+  }
+
   return (
     <div>
       {words.length > 0 && (

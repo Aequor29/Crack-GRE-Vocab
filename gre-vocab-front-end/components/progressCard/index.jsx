@@ -81,7 +81,7 @@ export default function ProgressCard() {
     // User is not logged in or data could not be fetched
     return (
       <div className="flex flex-col justify-center items-center my-4">
-        <h1 className="text-primary">Please login to see progress</h1>
+        <h3 className="text-primary">Please login to see progress</h3>
       </div>
     );
   }

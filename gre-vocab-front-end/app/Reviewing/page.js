@@ -30,7 +30,7 @@ export default function reviewSessionPage() {
   if (!isLoggedIn) {
     return (
       <main className="flex flex-col justify-center items-center my-4">
-        <h1 className="text-primary">Please login to continue</h1>
+        <h3 className="text-primary">Please login to continue</h3>
       </main>
     );
   }
