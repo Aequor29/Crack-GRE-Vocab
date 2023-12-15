@@ -20,9 +20,11 @@ export default function RootLayout({ children }) {
       >
         <Providers>
           <AuthProvider>
-            <Nav />
-            {children}
-            <Footer />
+            <div className="flex flex-col min-h-screen">
+              <Nav />
+              {children}
+              <Footer />
+            </div>
           </AuthProvider>
         </Providers>
       </body>

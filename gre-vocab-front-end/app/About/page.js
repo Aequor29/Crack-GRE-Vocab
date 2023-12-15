@@ -1,6 +1,6 @@
 export default function AboutPage() {
   return (
-    <main className="flex flex-col items-center justify-center my-4 px-4 md:px-0">
+    <main className="flex flex-col items-center justify-center my-4 px-4 md:px-0 flex-grow">
       <h1 className="text-2xl font-bold text-center mb-4">
         Words From Your Dev
       </h1>
