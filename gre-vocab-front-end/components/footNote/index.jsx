@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Footer() {
   return (
-    <footer className="bg-content1-200 text-center text-xs p-3 absolute bottom-0 w-full border-t">
+    <footer className="bg-content1-200 text-center text-xs p-3 relative bottom-0 w-full border-t">
       <div>
         © {new Date().getFullYear()} Developed by Richard Hu. All rights
         reserved.

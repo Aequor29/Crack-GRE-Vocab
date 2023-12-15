@@ -36,7 +36,7 @@ export default function reviewSessionPage() {
   }
 
   return (
-    <main className="container mx-auto px-4">
+    <main className="container mx-auto px-4 my-4">
       <ReviewWords onUserResponse={handleUserResponse} />
       <UpdateProgress
         wordId={wordId}

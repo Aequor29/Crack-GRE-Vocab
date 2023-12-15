@@ -35,7 +35,7 @@ const LearningSessionPage = () => {
   }
 
   return (
-    <main className="container mx-auto px-4">
+    <main className="container mx-auto px-4 my-4">
       <NewWords onUserResponse={handleUserResponse} />
       <CreateProgress
         wordId={wordId}
