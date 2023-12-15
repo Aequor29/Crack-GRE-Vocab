@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
-import dj_database_url
 
 from datetime import timedelta
 from pathlib import Path
@@ -85,9 +84,13 @@ WSGI_APPLICATION = 'crackGreVocab.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default="sqlite:///db.sqlite3" +os.path.join(BASE_DIR, 'db.sqlite3')
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'aequor$default',
+        'USER': 'aequor',
+        'PASSWORD': 'Super980',
+        'HOST': 'aequor.mysql.pythonanywhere-services.com',
+    }
 }
 
 
