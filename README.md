@@ -37,26 +37,26 @@ cd Crack-GRE-Vocab
 
 Navigate to the frontend directory and install dependencies:
 
-\`\`\`bash
+```bash
 cd gre-vocab-front-end
 npm install
 npm run dev
-\`\`\`
+```
 
 ### 3. Backend Setup (Django)
 
 1. Set up a virtual environment:
 
-    \`\`\`bash
+    ```bash
     python -m venv env
     source env/bin/activate  # On Windows use \`env\Scripts\activate\`
-    \`\`\`
+    ```
 
 2. Install dependencies:
 
-    \`\`\`bash
+    ```bash
     pip install -r requirements.txt
-    \`\`\`
+    ```
 
 3. Run the Django server:
 
