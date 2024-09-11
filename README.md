@@ -45,21 +45,58 @@ npm run dev
 
 ### 3. Backend Setup (Django)
 
-1. Set up a virtual environment:
+1. Install MySQL if you haven't and create a database:
+
+   - Install MySQL Server and MySQL Workbench (optional).
+   - Create a new database in MySQL for this project (e.g., `crack_gre_vocab`).
+
+2. Set up a virtual environment:
 
     ```bash
     python -m venv env
     source env/bin/activate  # On Windows use \`env\Scripts\activate\`
     ```
 
-2. Install dependencies:
+3. Install dependencies:
 
     ```bash
     pip install -r requirements.txt
     ```
 
-3. Run the Django server:
+4. Configure database settings:
 
-    \`\`\`bash
+   - Open `settings.py` in the backend directory.
+   - Update the `DATABASES` setting with your MySQL credentials:
+
+    ```python
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'crack_gre_vocab',
+            'USER': '<your_mysql_user>',
+            'PASSWORD': '<your_mysql_password>',
+            'HOST': 'localhost',
+            'PORT': '3306',
+        }
+    }
+    ```
+
+5. Load initial word data:
+
+    If there is a script to load initial data into the database, run:
+
+    ```bash
+    python manage.py import_words
+    ```
+
+6. Run database migrations:
+
+    ```bash
+    python manage.py migrate
+    ```
+
+7. Run the Django server:
+
+    ```bash
     python manage.py runserver
-    \`\`\`
+    ```
