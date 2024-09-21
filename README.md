@@ -1,6 +1,8 @@
 # 🎓 Crack-GRE-Vocab
 
 This project is my final submission for **DIG-245 Critical Web Design** at Davidson College. The central focus of this project is to enhance the efficiency and engagement of GRE vocabulary learning through a web application.
+![image](https://github.com/user-attachments/assets/8508134a-4eaa-4e17-a437-86e1cec95416)
+
 
 ## 📚 Project Overview
 
