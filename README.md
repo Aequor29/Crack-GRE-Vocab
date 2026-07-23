@@ -47,58 +47,37 @@ npm run dev
 
 ### 3. Backend Setup (Django)
 
-1. Install MySQL if you haven't and create a database:
+1. Install PostgreSQL and create a local database named `crack_gre_vocab`.
 
-   - Install MySQL Server and MySQL Workbench (optional).
-   - Create a new database in MySQL for this project (e.g., `crack_gre_vocab`).
-
-2. Set up a virtual environment:
+2. Set up a virtual environment and install the pinned dependencies:
 
     ```bash
+    cd crackGreVocab
     python -m venv env
     source env/bin/activate  # On Windows use \`env\Scripts\activate\`
-    ```
-
-3. Install dependencies:
-
-    ```bash
+    python -m pip install --upgrade pip
     pip install -r requirements.txt
     ```
 
-4. Configure database settings:
+3. Copy the safe example configuration and replace its local placeholder values:
 
-   - Open `settings.py` in the backend directory.
-   - Update the `DATABASES` setting with your MySQL credentials:
-
-    ```python
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'crack_gre_vocab',
-            'USER': '<your_mysql_user>',
-            'PASSWORD': '<your_mysql_password>',
-            'HOST': 'localhost',
-            'PORT': '3306',
-        }
-    }
+    ```bash
+    cp .env.example .env
     ```
 
-5. Load initial word data:
+   Production values belong in the hosting provider's secret store. Never commit
+   `.env` or working credentials.
 
-    If there is a script to load initial data into the database, run:
+4. Run migrations and backend checks:
+
+    python manage.py migrate
+    python manage.py check
+    python manage.py test
+    ```
+
+5. Load initial word data when needed, then run the server:
 
     ```bash
     python manage.py import_words
-    ```
-
-6. Run database migrations:
-
-    ```bash
-    python manage.py migrate
-    ```
-
-7. Run the Django server:
-
-    ```bash
     python manage.py runserver
     ```

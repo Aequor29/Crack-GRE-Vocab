@@ -1,2 +1,1 @@
-import pymysql
-pymysql.install_as_MySQLdb()
+"""Crack GRE Vocab Django project."""
