@@ -27,10 +27,10 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG')
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = ['127.0.0.1','localhost']
-ALLOWED_HOSTS += os.environ.get('ALLOWED_HOSTS').split()
+ALLOWED_HOSTS += os.environ.get('ALLOWED_HOSTS', '').split()
 
 # Application definition
 
@@ -86,10 +86,10 @@ WSGI_APPLICATION = 'crackGreVocab.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'aequor$default',
-        'USER': 'aequor',
-        'PASSWORD': 'Super980',
-        'HOST': 'aequor.mysql.pythonanywhere-services.com',
+        'NAME': os.environ.get('DB_NAME', 'aequor$default'),
+        'USER': os.environ.get('DB_USER', 'aequor'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST', 'aequor.mysql.pythonanywhere-services.com'),
     }
 }
 
@@ -153,6 +153,8 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=10),
 }
 
-CORS_ALLOWED_ALL_ORIGINS = True
+CORS_ALLOWED_ALL_ORIGINS = os.environ.get(
+    'CORS_ALLOWED_ALL_ORIGINS', 'False'
+).lower() in ('1', 'true', 'yes')
 
 
