@@ -5,7 +5,6 @@ from collections.abc import Iterable
 
 from django.core.exceptions import ImproperlyConfigured
 
-
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 

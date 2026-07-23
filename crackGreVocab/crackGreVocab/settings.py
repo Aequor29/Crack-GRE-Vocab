@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 
 from .config import env_bool, env_list, required_env
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env", override=False)
 
