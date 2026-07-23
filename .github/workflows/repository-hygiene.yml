@@ -1,0 +1,29 @@
+name: Repository hygiene
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - run: python --version
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: gre-vocab-front-end/package-lock.json
+      - run: scripts/check-repository-hygiene.sh
+      - run: npm ci
+        working-directory: gre-vocab-front-end
+      - run: npm run build
+        working-directory: gre-vocab-front-end
