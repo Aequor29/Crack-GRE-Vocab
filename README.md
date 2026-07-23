@@ -70,6 +70,7 @@ npm run dev
 
 4. Run migrations and backend checks:
 
+    ```bash
     python manage.py migrate
     python manage.py check
     python manage.py test
@@ -81,3 +82,26 @@ npm run dev
     python manage.py import_words
     python manage.py runserver
     ```
+
+### Backend quality checks
+
+The backend targets the Python version in `.python-version`. Install
+`crackGreVocab/requirements-dev.txt`, then run:
+
+```bash
+ruff check crackGreVocab/crackGreVocab/config.py \
+  crackGreVocab/crackGreVocab/settings.py \
+  crackGreVocab/crackGreVocab/test_config.py \
+  crackGreVocab/vocab_backend/test_legacy_auth.py
+mypy crackGreVocab/crackGreVocab/config.py
+cd crackGreVocab
+python manage.py check
+python manage.py test
+```
+
+Runtime dependencies are declared in `requirements.in` and fully pinned in
+`requirements.txt`. Regenerate the lock from `crackGreVocab/` with:
+
+```bash
+pip-compile --output-file=requirements.txt requirements.in
+```

@@ -1,6 +1,5 @@
 """Django settings for Crack GRE Vocab."""
 
-import os
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -121,10 +120,20 @@ CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS",
     default=("http://localhost:3000", "http://127.0.0.1:3000") if DEBUG else (),
 )
+if not DEBUG and not CORS_ALLOWED_ORIGINS:
+    raise ImproperlyConfigured(
+        "CORS_ALLOWED_ORIGINS must contain at least one origin when DEBUG is false."
+    )
+
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
     default=CORS_ALLOWED_ORIGINS if DEBUG else (),
 )
+if not DEBUG and not CSRF_TRUSTED_ORIGINS:
+    raise ImproperlyConfigured(
+        "CSRF_TRUSTED_ORIGINS must contain at least one origin when DEBUG is false."
+    )
+
 CORS_ALLOW_CREDENTIALS = True
 
 SESSION_COOKIE_HTTPONLY = True
@@ -133,10 +142,17 @@ SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=not DEBUG)
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if env_bool("TRUST_X_FORWARDED_PROTO", default=False)
+    else None
+)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_HSTS_SECONDS = 0 if DEBUG else 3600
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+    default=False,
+)
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
