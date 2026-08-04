@@ -58,7 +58,6 @@ jobs:
           crackGreVocab/config.py
           crackGreVocab/settings.py
           crackGreVocab/test_config.py
-          vocab_backend/test_legacy_auth.py
       - run: mypy crackGreVocab/config.py
       - run: python manage.py check
       - run: python manage.py test

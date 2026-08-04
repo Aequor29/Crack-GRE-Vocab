@@ -1,9 +1,16 @@
+# Local secrets and configuration
 .env
 .env.*
 !.env.example
 
+# Local product-planning documents
+docs/
+
+# Python
 __pycache__/
 *.py[cod]
+.venv/
+venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -11,10 +18,18 @@ __pycache__/
 htmlcov/
 staticfiles/
 
+# Node and Next.js
 node_modules/
 .next/
 out/
+coverage/
+*.tsbuildinfo
 
+# Editors and operating systems
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local deployment state
 .vercel/
-docs/
