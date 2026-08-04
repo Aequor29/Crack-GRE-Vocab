@@ -1,8 +1,12 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import HomePage from "@/app/page";
 import { SiteHeader } from "@/components/site-header";
+
+vi.mock("@/components/auth/auth-navigation", () => ({
+  AuthNavigation: () => <a href="/sign-in">Sign in</a>,
+}));
 
 describe("application shell", () => {
   it("renders the primary navigation and page landmark", () => {

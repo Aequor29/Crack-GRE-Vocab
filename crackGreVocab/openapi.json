@@ -27,6 +27,276 @@
                 }
             }
         },
+        "/api/auth/account/": {
+            "get": {
+                "operationId": "auth_account_retrieve",
+                "description": "Return the learner represented by the current server session.",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LearnerAccount"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/csrf/": {
+            "get": {
+                "operationId": "auth_csrf_retrieve",
+                "description": "Issue the masked token required by session-backed mutations.",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CsrfToken"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/sign-in/": {
+            "post": {
+                "operationId": "auth_sign_in_create",
+                "description": "Create a Django session from an email and password.",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-CSRFToken",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Masked token from GET /api/auth/csrf/.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SignInRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LearnerAccount"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuthValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "415": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/sign-out/": {
+            "post": {
+                "operationId": "auth_sign_out_create",
+                "description": "End the current session without exposing whether it existed.",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-CSRFToken",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Masked token from GET /api/auth/csrf/.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/sign-up/": {
+            "post": {
+                "operationId": "auth_sign_up_create",
+                "description": "Create and immediately sign in a new learner.",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-CSRFToken",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Masked token from GET /api/auth/csrf/.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SignUpRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LearnerAccount"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuthValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "415": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/readiness/": {
             "get": {
                 "operationId": "readiness_retrieve",
@@ -64,6 +334,63 @@
     },
     "components": {
         "schemas": {
+            "ApiError": {
+                "type": "object",
+                "description": "Describe a non-field API error.",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "AuthValidationError": {
+                "type": "object",
+                "description": "Describe malformed JSON or field-level account input errors.",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "display_name": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "password": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "non_field_errors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "CsrfToken": {
+                "type": "object",
+                "description": "Return a masked CSRF token for one unsafe request.",
+                "properties": {
+                    "csrf_token": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "csrf_token"
+                ]
+            },
             "DatabaseEnum": {
                 "enum": [
                     "available",
@@ -71,6 +398,31 @@
                 ],
                 "type": "string",
                 "description": "* `available` - available\n* `unavailable` - unavailable"
+            },
+            "LearnerAccount": {
+                "type": "object",
+                "description": "Return the public portion of the current learner account.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "readOnly": true,
+                        "title": "Email address"
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "email",
+                    "id"
+                ]
             },
             "Readiness": {
                 "type": "object",
@@ -100,6 +452,54 @@
                     "service"
                 ]
             },
+            "SignInRequest": {
+                "type": "object",
+                "description": "Validate the credentials supplied for a new server session.",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "minLength": 1,
+                        "maxLength": 254
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "email",
+                    "password"
+                ]
+            },
+            "SignUpRequest": {
+                "type": "object",
+                "description": "Validate and create a clean-rebuild learner account.",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "minLength": 1,
+                        "maxLength": 254
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "email",
+                    "password"
+                ]
+            },
             "StatusEnum": {
                 "enum": [
                     "ready",
@@ -107,6 +507,13 @@
                 ],
                 "type": "string",
                 "description": "* `ready` - ready\n* `unavailable` - unavailable"
+            }
+        },
+        "securitySchemes": {
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid"
             }
         }
     }
