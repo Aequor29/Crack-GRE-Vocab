@@ -47,16 +47,23 @@ npm run dev
 
 ### 3. Backend Setup (Django)
 
-1. Install PostgreSQL and create a local database named `crack_gre_vocab`.
+1. Install PostgreSQL and create a database with your local PostgreSQL role:
 
-2. Set up a virtual environment and install the pinned dependencies:
+    ```bash
+    createdb crack_gre_vocab
+    ```
+
+   The role must have `CREATEDB` permission because Django creates an isolated
+   test database.
+
+2. Set up a virtual environment and install the fully pinned development lock:
 
     ```bash
     cd crackGreVocab
     python -m venv .venv
     source .venv/bin/activate  # On Windows use \`.venv\Scripts\activate\`
     python -m pip install --upgrade pip
-    pip install -r requirements.txt
+    python -m pip install --requirement requirements-dev.txt
     ```
 
 3. Copy the safe example configuration and replace its local placeholder values:
@@ -68,38 +75,59 @@ npm run dev
    Production values belong in the hosting provider's secret store. Never commit
    `.env` or working credentials.
 
-4. Run migrations and backend checks:
+4. Build the empty database and run the backend acceptance checks:
 
     ```bash
-    python manage.py migrate
-    python manage.py check
-    python manage.py test
+    python manage.py migrate --noinput
+    python manage.py migrate --check
+    python manage.py makemigrations --check --dry-run
+    python manage.py check --database default
+    python manage.py test --noinput --verbosity 2
     ```
 
-5. Run the clean backend shell:
+5. Start the backend:
 
     ```bash
-    python manage.py runserver
+    python manage.py runserver --noreload
     ```
+
+6. From another shell, verify the controlled service document:
+
+    ```bash
+    curl --fail-with-body http://127.0.0.1:8000/api/
+    # {"service":"crack-gre-vocab-api"}
+    ```
+
+   This static response identifies the API process. Database-aware readiness,
+   OpenAPI, and the typed frontend path belong to the next tracer-bullet issue.
 
 ### Backend quality checks
 
-The backend targets the Python version in `.python-version`. Install
-`crackGreVocab/requirements-dev.txt`, then run:
+The backend targets the Python version in `.python-version`. From
+`crackGreVocab/`, run:
 
 ```bash
-ruff check crackGreVocab/crackGreVocab/config.py \
-  crackGreVocab/crackGreVocab/settings.py
-mypy crackGreVocab/crackGreVocab/config.py
-cd crackGreVocab
-python manage.py check
-python manage.py test
+ruff check api crackGreVocab tests manage.py
+mypy api crackGreVocab tests manage.py
+python -m compileall -q api crackGreVocab tests manage.py
+python -m pip check
+python manage.py check --database default
+python manage.py makemigrations --check --dry-run
+python manage.py test --noinput --verbosity 2
 ```
 
-Runtime dependencies are declared in `requirements.in` and fully pinned in
-`requirements.txt`. Regenerate the lock from `crackGreVocab/` with the pinned
-`uv` development tool:
+Runtime and development inputs are declared separately and compiled into fully
+resolved locks. Regenerate both from `crackGreVocab/` with the pinned `uv`
+tool:
 
 ```bash
 uv pip compile requirements.in --output-file requirements.txt --python-version 3.14
+uv pip compile requirements-dev.in --output-file requirements-dev.txt --python-version 3.14
 ```
+
+### Milestone 1 vocabulary seed
+
+`crackGreVocab/data/GRE_word.csv` remains the initial vocabulary source.
+AEQ-12 will audit and normalize it, then enrich definitions and examples through
+free public APIs as an offline build step. Production will read the resulting
+repository-owned database content and will not depend on those APIs at runtime.
