@@ -9,6 +9,8 @@
   },
   "packageManager": "npm@11.19.0",
   "scripts": {
+    "api:generate": "swagger-typescript-api generate --path ../crackGreVocab/openapi.json --output lib/api/generated --name schema.generated.ts --no-client --enum-style union --silent && biome format --write lib/api/generated/schema.generated.ts",
+    "api:check": "npm run api:generate && git diff --exit-code -- lib/api/generated && git ls-files --error-unmatch lib/api/generated/schema.generated.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -35,6 +37,7 @@
     "@types/react-dom": "19.2.4",
     "jsdom": "30.0.1",
     "postcss": "8.5.25",
+    "swagger-typescript-api": "13.12.6",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
