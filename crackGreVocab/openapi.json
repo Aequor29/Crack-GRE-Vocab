@@ -1,0 +1,113 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Crack GRE Vocab API",
+        "version": "0.1.0",
+        "description": "Local API contract for the Milestone 1 cold rebuild."
+    },
+    "paths": {
+        "/api/": {
+            "get": {
+                "operationId": "service_index_retrieve",
+                "description": "Return the stable, non-readiness service document.",
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ServiceIndex"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/readiness/": {
+            "get": {
+                "operationId": "readiness_retrieve",
+                "description": "Check the database without exposing connection failure details.",
+                "tags": [
+                    "readiness"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Readiness"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Readiness"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "DatabaseEnum": {
+                "enum": [
+                    "available",
+                    "unavailable"
+                ],
+                "type": "string",
+                "description": "* `available` - available\n* `unavailable` - unavailable"
+            },
+            "Readiness": {
+                "type": "object",
+                "description": "Describe the stable ready or database-unavailable response shape.",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/StatusEnum"
+                    },
+                    "database": {
+                        "$ref": "#/components/schemas/DatabaseEnum"
+                    }
+                },
+                "required": [
+                    "database",
+                    "status"
+                ]
+            },
+            "ServiceIndex": {
+                "type": "object",
+                "description": "Describe the database-independent service document.",
+                "properties": {
+                    "service": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "service"
+                ]
+            },
+            "StatusEnum": {
+                "enum": [
+                    "ready",
+                    "unavailable"
+                ],
+                "type": "string",
+                "description": "* `ready` - ready\n* `unavailable` - unavailable"
+            }
+        }
+    }
+}

@@ -5,10 +5,10 @@ active recall and adaptive review. The project is currently a private,
 local-only cold rebuild: the previous prototype is retired, and Milestone 1 is
 not a generally available product.
 
-The current foundation includes a supported Django/PostgreSQL backend and a
-clean Next.js application shell. Authentication, study flows, progress views,
-the typed frontend/backend tracer bullet, hosted infrastructure, and deployment
-automation will be added through their own scoped issues.
+The current foundation includes a supported Django/PostgreSQL backend, a clean
+Next.js application shell, and a generated typed readiness path between them.
+Authentication, study flows, progress views, hosted infrastructure, and
+deployment automation will be added through their own scoped issues.
 
 ## Repository layout
 
@@ -35,9 +35,10 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:3000>. The shell does not call the backend yet. See
-`gre-vocab-front-end/README.md` for its supported stack, boundaries, and quality
-commands.
+Open <http://127.0.0.1:3000>. The readiness card calls the local Django service
+configured by `NEXT_PUBLIC_API_BASE_URL`; it remains usable and offers a manual
+retry when Django or PostgreSQL is unavailable. See `gre-vocab-front-end/README.md`
+for its supported stack, boundaries, and quality commands.
 
 ## Backend setup
 
@@ -64,12 +65,21 @@ python manage.py test --noinput --verbosity 2
 python manage.py runserver --noreload
 ```
 
-The root API document should respond locally:
+The process document and database-aware readiness endpoint should respond
+locally:
 
 ```bash
 curl --fail-with-body http://127.0.0.1:8000/api/
 # {"service":"crack-gre-vocab-api"}
+
+curl --fail-with-body http://127.0.0.1:8000/api/readiness/
+# {"status":"ready","database":"available"}
 ```
+
+`/api/` is intentionally database-independent. `/api/readiness/` returns HTTP
+503 with a generic unavailable document when PostgreSQL cannot answer, without
+exposing connection details. The raw OpenAPI document is available at
+`/api/schema/`.
 
 ## Quality checks
 
@@ -93,6 +103,32 @@ python manage.py check --database default
 python manage.py makemigrations --check --dry-run
 python manage.py test --noinput --verbosity 2
 ```
+
+Regenerate and validate the typed API boundary after changing an endpoint:
+
+```bash
+cd crackGreVocab
+python manage.py spectacular --file openapi.json --format openapi-json --validate --fail-on-warn
+cd ../gre-vocab-front-end
+npm run api:generate
+npm run typecheck
+cd ..
+git diff --exit-code -- crackGreVocab/openapi.json gre-vocab-front-end/lib/api/generated
+```
+
+On a clean checkout, that final command fails when the committed schema or
+generated TypeScript types have drifted. `npm run api:check` is the shorthand
+frontend drift gate after `openapi.json` has been regenerated. Review and commit
+both artifacts when an API change is intentional.
+
+## Local full-stack smoke
+
+With PostgreSQL, Django, and Next.js running as described above, open
+<http://127.0.0.1:3000> and confirm the readiness card announces `Backend and
+database ready`. Stop PostgreSQL and choose `Try again` to confirm the generic
+database-unavailable state, then restart PostgreSQL and retry to confirm
+recovery. This exercises the browser, exact local-origin CORS policy, Django,
+and PostgreSQL without introducing hosted infrastructure.
 
 ## Milestone 1 boundaries
 

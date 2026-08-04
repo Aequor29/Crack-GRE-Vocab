@@ -1,3 +1,5 @@
+import { ReadinessStatus } from "@/components/readiness-status";
+
 const principles = [
   {
     number: "01",
@@ -21,8 +23,6 @@ const principles = [
 const foundationStatus = [
   { label: "Django + PostgreSQL foundation", state: "Ready" },
   { label: "Accessible frontend shell", state: "Ready" },
-  { label: "Typed local health path", state: "Next" },
-  { label: "Learner features", state: "Planned" },
 ] as const;
 
 export default function HomePage() {
@@ -82,6 +82,13 @@ export default function HomePage() {
                   </dd>
                 </div>
               ))}
+              <ReadinessStatus />
+              <div className="flex items-center justify-between gap-6 border-t border-black/10 py-4 dark:border-white/10">
+                <dt className="text-sm text-foreground/70">Learner features</dt>
+                <dd className="rounded-full bg-background px-3 py-1 text-xs font-bold text-foreground">
+                  Planned
+                </dd>
+              </div>
             </dl>
           </aside>
         </div>
@@ -100,12 +107,12 @@ export default function HomePage() {
           <div className="grid gap-5 text-base leading-7 text-foreground/70 sm:grid-cols-2">
             <p>
               This frontend intentionally contains no inherited dashboard, authentication, or study
-              behavior. Those features will arrive with their own backend contracts and focused
-              tests.
+              behavior. The first local contract now reports whether Django and PostgreSQL are
+              ready.
             </p>
             <p>
-              The next tracer bullet connects this shell to Django through a generated, typed health
-              boundary—still entirely in local development.
+              The typed boundary is generated from Django&apos;s OpenAPI document and keeps expected
+              downtime visible and retryable—still entirely in local development.
             </p>
           </div>
         </div>

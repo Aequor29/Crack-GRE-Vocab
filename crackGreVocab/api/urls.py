@@ -1,11 +1,14 @@
-"""Routes for the foundational API service document."""
+"""Routes for foundational local API contracts."""
 
 from django.urls import path
+from drf_spectacular.views import SpectacularAPIView
 
-from .views import ServiceIndexView
+from .views import ReadinessView, ServiceIndexView
 
 app_name = "api"
 
 urlpatterns = [
     path("", ServiceIndexView.as_view(), name="service-index"),
+    path("readiness/", ReadinessView.as_view(), name="readiness"),
+    path("schema/", SpectacularAPIView.as_view(), name="schema"),
 ]

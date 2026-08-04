@@ -38,7 +38,9 @@ DATABASES = {"default": database}
 
 INSTALLED_APPS = [
     "api.apps.ApiConfig",
+    "corsheaders",
     "rest_framework",
+    "drf_spectacular",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -50,6 +52,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -100,7 +103,29 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework.authentication.SessionAuthentication",
     ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Crack GRE Vocab API",
+    "DESCRIPTION": "Local API contract for the Milestone 1 cold rebuild.",
+    "VERSION": "0.1.0",
+    "OAS_VERSION": "3.0.3",
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SERVE_INCLUDE_SCHEMA": False,
+}
+
+CORS_ALLOWED_ORIGINS = env_list(
+    "CORS_ALLOWED_ORIGINS",
+    default=(
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    )
+    if DEBUG
+    else (),
+)
+CORS_URLS_REGEX = r"^/api/.*$"
+CORS_ALLOW_CREDENTIALS = False
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
