@@ -1,110 +1,88 @@
-# 🎓 Crack-GRE-Vocab
+# Crack GRE Vocab
 
-This project is my final submission for **DIG-245 Critical Web Design** at Davidson College. The central focus of this project is to enhance the efficiency and engagement of GRE vocabulary learning through a web application.
-![image](https://github.com/user-attachments/assets/8508134a-4eaa-4e17-a437-86e1cec95416)
+Crack GRE Vocab is a focused GRE vocabulary learning application built around
+active recall and adaptive review. The project is currently a private,
+local-only cold rebuild: the previous prototype is retired, and Milestone 1 is
+not a generally available product.
 
+The current foundation includes a supported Django/PostgreSQL backend and a
+clean Next.js application shell. Authentication, study flows, progress views,
+the typed frontend/backend tracer bullet, hosted infrastructure, and deployment
+automation will be added through their own scoped issues.
 
-## 📚 Project Overview
+## Repository layout
 
-This web app designed an adaptive learning platform that uses **spaced repetition** and **active recall** techniques to maximize long-term vocabulary retention. The app offers accurate word definitions and pronunciation, allowing users to learn efficiently. Additionally, it provides a dashboard for users to view their learning progress.
+- `crackGreVocab/` — Django REST Framework backend
+- `gre-vocab-front-end/` — Next.js frontend
+- `crackGreVocab/data/GRE_word.csv` — Milestone 1 vocabulary source
 
-### 🌟 Key Features
+## Supported runtimes
 
-- **Adaptive Learning:** Utilizes spaced repetition to optimize memory retention.
-- **Active Recall:** Encourages active recall practice for more effective learning.
-- **Accurate Word Definitions & Pronunciation:** Helps users learn precise meanings and proper pronunciation.
-- **Progress Dashboard:** Users can track their progress and stay motivated.
-- **Free**
+- Python 3.14.6, pinned in `.python-version`
+- Node.js 24.18.x LTS, pinned in `.nvmrc`
+- npm 11
+- PostgreSQL for the Django database
 
-This app is perfect for college students struggling with the limited free resources available for GRE verbal preparation and aiming to improve their scores.
+## Frontend setup
 
-## 🚧 Private cold rebuild
-
-The previous prototype is retired and the Vercel project is intentionally
-paused. Milestone 1 is developed and verified locally from a clean database.
-Fresh hosted infrastructure and the public launch are separate pre-GA work.
-
-## 🛠️ Running Locally
-
-To run the project locally, follow these steps:
-
-### 1. Clone the Repository
+From the repository root:
 
 ```bash
-git clone https://github.com/Aequor29/Crack-GRE-Vocab/
-cd Crack-GRE-Vocab
-```
-
-### 2. Frontend Setup (Next.js)
-
-Navigate to the frontend directory and install dependencies:
-
-```bash
+nvm use
 cd gre-vocab-front-end
-npm install
+cp .env.example .env.local
+npm ci
 npm run dev
 ```
 
-### 3. Backend Setup (Django)
+Open <http://127.0.0.1:3000>. The shell does not call the backend yet. See
+`gre-vocab-front-end/README.md` for its supported stack, boundaries, and quality
+commands.
 
-1. Install PostgreSQL and create a database with your local PostgreSQL role:
+## Backend setup
 
-    ```bash
-    createdb crack_gre_vocab
-    ```
+Create an empty local PostgreSQL database, then install the pinned development
+dependencies:
 
-   The role must have `CREATEDB` permission because Django creates an isolated
-   test database.
+```bash
+createdb crack_gre_vocab
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install --requirement crackGreVocab/requirements-dev.txt
+cp crackGreVocab/.env.example crackGreVocab/.env
+```
 
-2. Set up a virtual environment and install the fully pinned development lock:
+Replace the safe placeholders in `crackGreVocab/.env`, then initialize and run
+the service:
 
-    ```bash
-    cd crackGreVocab
-    python -m venv .venv
-    source .venv/bin/activate  # On Windows use \`.venv\Scripts\activate\`
-    python -m pip install --upgrade pip
-    python -m pip install --requirement requirements-dev.txt
-    ```
+```bash
+cd crackGreVocab
+python manage.py migrate --noinput
+python manage.py check --database default
+python manage.py test --noinput --verbosity 2
+python manage.py runserver --noreload
+```
 
-3. Copy the safe example configuration and replace its local placeholder values:
+The root API document should respond locally:
 
-    ```bash
-    cp .env.example .env
-    ```
+```bash
+curl --fail-with-body http://127.0.0.1:8000/api/
+# {"service":"crack-gre-vocab-api"}
+```
 
-   Production values belong in the hosting provider's secret store. Never commit
-   `.env` or working credentials.
+## Quality checks
 
-4. Build the empty database and run the backend acceptance checks:
+Run frontend checks from `gre-vocab-front-end/`:
 
-    ```bash
-    python manage.py migrate --noinput
-    python manage.py migrate --check
-    python manage.py makemigrations --check --dry-run
-    python manage.py check --database default
-    python manage.py test --noinput --verbosity 2
-    ```
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
 
-5. Start the backend:
-
-    ```bash
-    python manage.py runserver --noreload
-    ```
-
-6. From another shell, verify the controlled service document:
-
-    ```bash
-    curl --fail-with-body http://127.0.0.1:8000/api/
-    # {"service":"crack-gre-vocab-api"}
-    ```
-
-   This static response identifies the API process. Database-aware readiness,
-   OpenAPI, and the typed frontend path belong to the next tracer-bullet issue.
-
-### Backend quality checks
-
-The backend targets the Python version in `.python-version`. From
-`crackGreVocab/`, run:
+Run backend checks from `crackGreVocab/` with the virtual environment active:
 
 ```bash
 ruff check api crackGreVocab tests manage.py
@@ -116,18 +94,13 @@ python manage.py makemigrations --check --dry-run
 python manage.py test --noinput --verbosity 2
 ```
 
-Runtime and development inputs are declared separately and compiled into fully
-resolved locks. Regenerate both from `crackGreVocab/` with the pinned `uv`
-tool:
+## Milestone 1 boundaries
 
-```bash
-uv pip compile requirements.in --output-file requirements.txt --python-version 3.14
-uv pip compile requirements-dev.in --output-file requirements-dev.txt --python-version 3.14
-```
+`GRE_word.csv` remains the initial vocabulary source. A dedicated import issue
+will audit and normalize it, then enrich definitions and examples through free
+public APIs as an offline build step. The application will use repository-owned
+database content at runtime rather than depend on those APIs.
 
-### Milestone 1 vocabulary seed
-
-`crackGreVocab/data/GRE_word.csv` remains the initial vocabulary source.
-AEQ-12 will audit and normalize it, then enrich definitions and examples through
-free public APIs as an offline build step. Production will read the resulting
-repository-owned database content and will not depend on those APIs at runtime.
+Vercel, preview deployments, CI/CD, public domains, legacy migrations, and
+legacy authentication are intentionally out of scope until the rebuild is ready
+to launch.
