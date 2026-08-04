@@ -89,8 +89,7 @@ The backend targets the Python version in `.python-version`. Install
 
 ```bash
 ruff check crackGreVocab/crackGreVocab/config.py \
-  crackGreVocab/crackGreVocab/settings.py \
-  crackGreVocab/crackGreVocab/test_config.py
+  crackGreVocab/crackGreVocab/settings.py
 mypy crackGreVocab/crackGreVocab/config.py
 cd crackGreVocab
 python manage.py check
