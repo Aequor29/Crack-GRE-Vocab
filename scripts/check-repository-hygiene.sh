@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mapfile -t tracked_ignored < <(git ls-files -ci --exclude-standard)
-if ((${#tracked_ignored[@]})); then
+tracked_ignored="$(git ls-files -ci --exclude-standard)"
+if [[ -n "$tracked_ignored" ]]; then
   printf 'Tracked files match .gitignore:\n' >&2
-  printf '  %s\n' "${tracked_ignored[@]}" >&2
+  printf '%s\n' "$tracked_ignored" | sed 's/^/  /' >&2
   exit 1
 fi
 

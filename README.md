@@ -28,9 +28,6 @@ The web app is live! You can try it out at [www.crackgrevocab.co](http://www.cra
 
 To run the project locally, follow these steps:
 
-Use the Python version in `.python-version` and the Node.js version in `.nvmrc`.
-The frontend also requires npm 11, as declared in `package.json`.
-
 ### 1. Clone the Repository
 
 ```bash
@@ -44,7 +41,7 @@ Navigate to the frontend directory and install dependencies:
 
 ```bash
 cd gre-vocab-front-end
-npm ci
+npm install
 npm run dev
 ```
 
