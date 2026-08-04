@@ -3,7 +3,7 @@
 import os
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -32,7 +32,6 @@ def run_settings_script(
     script: str,
     *,
     overrides: Mapping[str, str] | None = None,
-    unset: Iterable[str] = (),
 ) -> subprocess.CompletedProcess[str]:
     """Run a settings import in an isolated interpreter and environment."""
     environment = {
@@ -42,8 +41,6 @@ def run_settings_script(
     }
     environment.update(BASE_SETTINGS_ENVIRONMENT)
     environment["PYTHON_DOTENV_DISABLED"] = "1"
-    for name in unset:
-        environment.pop(name, None)
     if overrides:
         environment.update(overrides)
 
