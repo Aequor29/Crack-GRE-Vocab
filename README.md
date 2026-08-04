@@ -18,11 +18,11 @@ This web app designed an adaptive learning platform that uses **spaced repetitio
 
 This app is perfect for college students struggling with the limited free resources available for GRE verbal preparation and aiming to improve their scores.
 
-## 🚀 Try It Out!
+## 🚧 Private cold rebuild
 
-The web app is live! You can try it out at [www.crackgrevocab.co](http://www.crackgrevocab.co).  
-- The **frontend** is hosted on Vercel.
-- The **backend** is hosted on PythonAnywhere.
+The previous prototype is retired and the Vercel project is intentionally
+paused. Milestone 1 is developed and verified locally from a clean database.
+Fresh hosted infrastructure and the public launch are separate pre-GA work.
 
 ## 🛠️ Running Locally
 
@@ -47,58 +47,59 @@ npm run dev
 
 ### 3. Backend Setup (Django)
 
-1. Install MySQL if you haven't and create a database:
+1. Install PostgreSQL and create a local database named `crack_gre_vocab`.
 
-   - Install MySQL Server and MySQL Workbench (optional).
-   - Create a new database in MySQL for this project (e.g., `crack_gre_vocab`).
-
-2. Set up a virtual environment:
+2. Set up a virtual environment and install the pinned dependencies:
 
     ```bash
-    python -m venv env
-    source env/bin/activate  # On Windows use \`env\Scripts\activate\`
-    ```
-
-3. Install dependencies:
-
-    ```bash
+    cd crackGreVocab
+    python -m venv .venv
+    source .venv/bin/activate  # On Windows use \`.venv\Scripts\activate\`
+    python -m pip install --upgrade pip
     pip install -r requirements.txt
     ```
 
-4. Configure database settings:
-
-   - Open `settings.py` in the backend directory.
-   - Update the `DATABASES` setting with your MySQL credentials:
-
-    ```python
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'crack_gre_vocab',
-            'USER': '<your_mysql_user>',
-            'PASSWORD': '<your_mysql_password>',
-            'HOST': 'localhost',
-            'PORT': '3306',
-        }
-    }
-    ```
-
-5. Load initial word data:
-
-    If there is a script to load initial data into the database, run:
+3. Copy the safe example configuration and replace its local placeholder values:
 
     ```bash
-    python manage.py import_words
+    cp .env.example .env
     ```
 
-6. Run database migrations:
+   Production values belong in the hosting provider's secret store. Never commit
+   `.env` or working credentials.
+
+4. Run migrations and backend checks:
 
     ```bash
     python manage.py migrate
+    python manage.py check
+    python manage.py test
     ```
 
-7. Run the Django server:
+5. Run the clean backend shell:
 
     ```bash
     python manage.py runserver
     ```
+
+### Backend quality checks
+
+The backend targets the Python version in `.python-version`. Install
+`crackGreVocab/requirements-dev.txt`, then run:
+
+```bash
+ruff check crackGreVocab/crackGreVocab/config.py \
+  crackGreVocab/crackGreVocab/settings.py
+mypy crackGreVocab/crackGreVocab/config.py
+cd crackGreVocab
+python manage.py check
+python manage.py test
+```
+
+Runtime dependencies are declared in `requirements.in` and fully pinned in
+`requirements.txt`. Regenerate the lock from `crackGreVocab/` with the pinned
+`uv` development tool:
+
+```bash
+uv pip compile requirements.in --output-file requirements.txt --python-version 3.14
+```
