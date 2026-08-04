@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Crack GRE Vocab frontend
 
-## Getting Started
+This directory contains the clean, local-only Next.js application shell for the
+private cold rebuild. It intentionally has no authentication, dashboard, study,
+or backend-readiness behavior yet.
 
-First, run the development server:
+## Supported toolchain
+
+- Node.js 24.18.x LTS (pinned in the repository `.nvmrc`)
+- npm 11
+- Next.js 16 and React 19
+- TypeScript 7, Tailwind CSS 4, and HeroUI 3
+
+## Local setup
+
+From the repository root:
 
 ```bash
+nvm use
+cd gre-vocab-front-end
+cp .env.example .env.local
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://127.0.0.1:3000>. The only application route is `/`; retired
+prototype routes return the standard not-found state.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+`NEXT_PUBLIC_API_BASE_URL` is a safe local placeholder reserved for AEQ-8. This
+shell makes no API requests.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+## Quality checks
 
-## Learn More
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run start
+```
 
-To learn more about Next.js, take a look at the following resources:
+The three focused tests cover the shell landmark/navigation, accessible loading
+state, and generic error/retry behavior. Product feature tests belong with the
+features they exercise.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment boundary
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+Vercel, preview deployments, CI/CD, public domains, and hosted configuration are
+intentionally out of scope during Milestone 1.
