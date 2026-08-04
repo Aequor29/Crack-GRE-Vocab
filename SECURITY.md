@@ -15,27 +15,16 @@ fix and disclosure timeline with the reporter.
 
 This solo project supports only the latest version on the default branch.
 
-## Exposed credentials
+## Retired prototype credentials
 
-Credentials found in Git history must be treated as compromised. Removing a
-secret from the current tree is not a substitute for rotating or revoking it.
+The current product is a private cold rebuild. Values from the retired prototype
+must never be reused in a local, staging, or production environment. Milestone 1
+does not recover old deployments, rewrite Git history, or perform provider
+rotation work; pre-GA environments will receive entirely fresh credentials.
 
-When a credential is discovered:
-
-1. Revoke or rotate it at the provider before relying on any repository cleanup.
-2. Replace it in the deployment secret store and verify the service still works.
-3. Record the provider, affected environment, rotation time, and verifier in the
-   private incident record. Never record the secret itself.
-4. Scan both the current tree and the complete reachable Git history:
-
-   ```bash
-   scripts/scan-secrets.sh current
-   scripts/scan-secrets.sh history
-   ```
-
-The history scan may continue to report an already-rotated value. History
-rewrites are a separate, coordinated incident-response decision because they
-invalidate existing clones and commit references. They must not delay rotation.
+Any newly discovered credential that still grants access to an active,
+non-prototype service should be reported privately and disabled through that
+service's normal incident process.
 
 ## Deployment trust boundaries
 

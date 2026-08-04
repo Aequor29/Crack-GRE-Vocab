@@ -1,6 +1,5 @@
 """Django settings for Crack GRE Vocab."""
 
-from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -40,7 +39,6 @@ DATABASES = {
 
 INSTALLED_APPS = [
     "rest_framework",
-    "vocab_backend",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -102,7 +100,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
     ),
 }
 
@@ -154,8 +152,3 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
 )
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
-
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=360),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=10),
-}

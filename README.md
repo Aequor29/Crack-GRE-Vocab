@@ -18,11 +18,11 @@ This web app designed an adaptive learning platform that uses **spaced repetitio
 
 This app is perfect for college students struggling with the limited free resources available for GRE verbal preparation and aiming to improve their scores.
 
-## 🚀 Try It Out!
+## 🚧 Private cold rebuild
 
-The web app is live! You can try it out at [www.crackgrevocab.co](http://www.crackgrevocab.co).  
-- The **frontend** is hosted on Vercel.
-- The **backend** is hosted on PythonAnywhere.
+The previous prototype is retired and the Vercel project is intentionally
+paused. Milestone 1 is developed and verified locally from a clean database.
+Fresh hosted infrastructure and the public launch are separate pre-GA work.
 
 ## 🛠️ Running Locally
 
@@ -53,8 +53,8 @@ npm run dev
 
     ```bash
     cd crackGreVocab
-    python -m venv env
-    source env/bin/activate  # On Windows use \`env\Scripts\activate\`
+    python -m venv .venv
+    source .venv/bin/activate  # On Windows use \`.venv\Scripts\activate\`
     python -m pip install --upgrade pip
     pip install -r requirements.txt
     ```
@@ -76,10 +76,9 @@ npm run dev
     python manage.py test
     ```
 
-5. Load initial word data when needed, then run the server:
+5. Run the clean backend shell:
 
     ```bash
-    python manage.py import_words
     python manage.py runserver
     ```
 
@@ -99,8 +98,9 @@ python manage.py test
 ```
 
 Runtime dependencies are declared in `requirements.in` and fully pinned in
-`requirements.txt`. Regenerate the lock from `crackGreVocab/` with:
+`requirements.txt`. Regenerate the lock from `crackGreVocab/` with the pinned
+`uv` development tool:
 
 ```bash
-pip-compile --output-file=requirements.txt requirements.in
+uv pip compile requirements.in --output-file requirements.txt --python-version 3.14
 ```
