@@ -15,11 +15,12 @@ deployment automation will be added through their own scoped issues.
 - `crackGreVocab/` — Django REST Framework backend
 - `gre-vocab-front-end/` — Next.js frontend
 - `crackGreVocab/data/GRE_word.csv` — Milestone 1 vocabulary source
+- `crackGreVocab/vocabulary/README.md` — corpus rebuild and import runbook
 
 ## Supported runtimes
 
 - Python 3.14.6, pinned in `.python-version`
-- Node.js 24.18.x LTS, pinned in `.nvmrc`
+- Node.js 24.19.x LTS, pinned in `.nvmrc`
 - npm 11
 - PostgreSQL for the Django database
 
@@ -132,10 +133,20 @@ and PostgreSQL without introducing hosted infrastructure.
 
 ## Milestone 1 boundaries
 
-`GRE_word.csv` remains the initial vocabulary source. A dedicated import issue
-will audit and normalize it, then enrich definitions and examples through free
-public APIs as an offline build step. The application will use repository-owned
-database content at runtime rather than depend on those APIs.
+`GRE_word.csv` remains the initial vocabulary source. The dedicated vocabulary
+app now audits and normalizes it, pins Open English WordNet 2025 by URL and
+SHA-256, produces an explicit human-review/fallback queue, builds immutable
+artifacts without network access, and imports them atomically into versioned
+PostgreSQL tables. See the
+[vocabulary corpus runbook](crackGreVocab/vocabulary/README.md) for all six
+commands, review decisions and overrides, provider pacing, offline build,
+activation, and idempotent import behavior.
+
+The reviewed `m1-v1` release is checked in with 3,034 canonical words and 3,389
+paired definition/example senses. Its review queue is empty: 22 words use the
+narrow automatic policy, 2,399 use explicit provider-sense decisions, and 613
+use explicit editorial overrides. Builds and imports fail closed on changed or
+invalid input, and the application never depends on dictionary APIs at runtime.
 
 Vercel, preview deployments, CI/CD, public domains, legacy migrations, and
 legacy authentication are intentionally out of scope until the rebuild is ready

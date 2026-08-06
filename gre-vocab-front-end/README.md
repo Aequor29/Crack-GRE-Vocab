@@ -7,7 +7,7 @@ the local Django/PostgreSQL backend.
 
 ## Supported toolchain
 
-- Node.js 24.18.x LTS (pinned in the repository `.nvmrc`)
+- Node.js 24.19.x LTS (pinned in the repository `.nvmrc`)
 - npm 11
 - Next.js 16 and React 19
 - TypeScript 7, Tailwind CSS 4, and HeroUI 3

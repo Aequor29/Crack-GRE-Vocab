@@ -1,0 +1,34 @@
+{
+  "collapse": [
+    {
+      "normalized_term": "agonize",
+      "source_records": [76, 2714]
+    },
+    {
+      "normalized_term": "alienate",
+      "source_records": [80, 2716]
+    },
+    {
+      "normalized_term": "disjunctive",
+      "source_records": [667, 2839]
+    },
+    {
+      "normalized_term": "permeate",
+      "source_records": [1736, 1916]
+    },
+    {
+      "normalized_term": "polymath",
+      "source_records": [1717, 1799]
+    },
+    {
+      "normalized_term": "premeditate",
+      "source_records": [1834, 2971]
+    },
+    {
+      "normalized_term": "secular",
+      "source_records": [2397, 2998]
+    }
+  ],
+  "schema_version": 1,
+  "source_sha256": "8c929941d992eee05a3014a7f08b0a130a4104b142800cd987b8500a17998efb"
+}
