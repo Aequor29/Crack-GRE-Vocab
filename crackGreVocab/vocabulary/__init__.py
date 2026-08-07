@@ -1,0 +1,1 @@
+"""Versioned vocabulary corpus domain."""
