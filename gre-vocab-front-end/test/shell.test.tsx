@@ -23,6 +23,7 @@ describe("application shell", () => {
       "href",
       "/#status",
     );
+    expect(screen.getByRole("link", { name: "Study" })).toHaveAttribute("href", "/study");
     expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Build recall that lasts.");
   });

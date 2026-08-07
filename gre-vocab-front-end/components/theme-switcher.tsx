@@ -22,8 +22,8 @@ export function ThemeSwitcher() {
 
   if (!mounted) {
     return (
-      <span aria-hidden="true" className="inline-flex h-8 w-24 items-center justify-center">
-        Theme
+      <span aria-hidden="true" className="inline-flex h-8 w-16 items-center justify-center sm:w-24">
+        <span className="hidden sm:inline">Theme</span>
       </span>
     );
   }
@@ -41,7 +41,8 @@ export function ThemeSwitcher() {
       size="sm"
       variant="ghost"
     >
-      Theme: {activeLabel}
+      <span className="hidden sm:inline">Theme: </span>
+      {activeLabel}
     </Button>
   );
 }
