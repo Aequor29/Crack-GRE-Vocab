@@ -42,3 +42,12 @@ reconstructs planning or scheduling rules.
 
 Both endpoints require the Django session. Creation also requires the CSRF
 cookie and masked `X-CSRFToken` issued by `GET /api/auth/csrf/`.
+
+## Code boundaries
+
+- `selectors.py` owns read-only ORM query shapes and ordering.
+- `persistence.py` owns row locking and Study Session writes; callers provide
+  the transaction boundary.
+- `services.py` owns product policy, business exceptions, and transactional
+  orchestration.
+- `models.py` owns durable relationships and database constraints.

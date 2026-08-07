@@ -88,7 +88,7 @@ class StudySessionPlanningTests(TestCase):
     def test_item_persistence_failure_rolls_back_the_session(self):
         with (
             patch(
-                "study.services.StudySessionItem.objects.bulk_create",
+                "study.persistence.StudySessionItem.objects.bulk_create",
                 side_effect=DatabaseError("simulated write failure"),
             ),
             self.assertRaises(DatabaseError),

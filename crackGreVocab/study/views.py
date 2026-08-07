@@ -15,13 +15,14 @@ from rest_framework.status import (
 )
 from rest_framework.views import APIView
 
+from .selectors import get_active_session
 from .serializers import (
     CreateStudySessionSerializer,
     StudyPlanningErrorSerializer,
     StudySessionSerializer,
     StudyValidationErrorSerializer,
 )
-from .services import StudyPlanningUnavailable, get_active_session, plan_study_session
+from .services import StudyPlanningUnavailable, plan_study_session
 
 
 class StudyApiView(APIView):
