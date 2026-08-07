@@ -1,4 +1,5 @@
 import type { Readiness } from "@/lib/api/generated/schema.generated";
+import { configuredApiOrigin } from "@/lib/api/origin";
 
 type OpenApiDocument = typeof import("../../../crackGreVocab/openapi.json");
 type OpenApiPaths = OpenApiDocument["paths"];
@@ -26,28 +27,6 @@ type CheckReadinessOptions = {
   fetcher?: typeof fetch;
   signal?: AbortSignal;
 };
-
-function configuredApiOrigin(): string | null {
-  const configuredUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (!configuredUrl) {
-    return null;
-  }
-
-  try {
-    const url = new URL(configuredUrl);
-    if (
-      !["http:", "https:"].includes(url.protocol) ||
-      url.pathname !== "/" ||
-      url.search ||
-      url.hash
-    ) {
-      return null;
-    }
-    return url.origin;
-  } catch {
-    return null;
-  }
-}
 
 function isReadinessPayload(value: unknown): value is ReadinessPayload {
   if (!value || typeof value !== "object") {

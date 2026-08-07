@@ -1,13 +1,13 @@
 # Crack GRE Vocab frontend
 
-This directory contains the clean, local-only Next.js application shell for the
-private cold rebuild. It intentionally has no authentication, dashboard, study,
-or hosted behavior. Its first real integration is a typed readiness request to
-the local Django/PostgreSQL backend.
+This directory contains the clean, local-only Next.js application for the
+private cold rebuild. It includes the typed readiness path and email/password
+Learner Account screens backed by Django sessions. Dashboard, study, and hosted
+behavior remain outside this slice.
 
 ## Supported toolchain
 
-- Node.js 24.18.x LTS (pinned in the repository `.nvmrc`)
+- Node.js 24.19.x LTS (pinned in the repository `.nvmrc`)
 - npm 11
 - Next.js 16 and React 19
 - TypeScript 7, Tailwind CSS 4, and HeroUI 3
@@ -25,14 +25,23 @@ npm run dev
 ```
 
 Start Django as described in the repository README, then open
-<http://127.0.0.1:3000>. The only application route is `/`; retired prototype
-routes return the standard not-found state.
+<http://localhost:3000>. The application routes are `/`, `/sign-up`, `/sign-in`,
+and the protected `/account`; retired prototype routes return the standard
+not-found state.
 
 `NEXT_PUBLIC_API_BASE_URL` is a public, local-only origin such as
-`http://127.0.0.1:8000`. The browser calls Django directly through its exact
+`http://localhost:8000`. The browser calls Django directly through its exact
 local-origin CORS policy. The page reports ready, database unavailable, or
 backend unavailable without displaying exception or connection details, and
 expected outages can be retried manually.
+
+Use the same hostname form for both processes. `localhost:3000` pairs with
+`localhost:8000`; if you choose `127.0.0.1:3000`, change the API origin to
+`http://127.0.0.1:8000`. Mixing them prevents the `SameSite=Lax` Django session
+cookie from accompanying API requests.
+
+Account mutations fetch a fresh masked CSRF token and include credentials. The
+frontend never stores a bearer token in local or session storage.
 
 ## Quality checks
 
@@ -44,9 +53,10 @@ npm run build
 npm run start
 ```
 
-The focused tests cover the existing shell states plus ready, database-down,
-backend-down, malformed-response, and interactive recovery behavior. Product
-feature tests belong with the features they exercise.
+The focused tests cover the shell and readiness states plus the typed account
+request contract, session restoration, protected account behavior, accessible
+form errors, and sign out. Product feature tests belong with the features they
+exercise.
 
 ## Typed API contract
 

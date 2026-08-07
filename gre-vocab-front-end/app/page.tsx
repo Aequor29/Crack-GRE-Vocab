@@ -84,9 +84,9 @@ export default function HomePage() {
               ))}
               <ReadinessStatus />
               <div className="flex items-center justify-between gap-6 border-t border-black/10 py-4 dark:border-white/10">
-                <dt className="text-sm text-foreground/70">Learner features</dt>
+                <dt className="text-sm text-foreground/70">Learner accounts</dt>
                 <dd className="rounded-full bg-background px-3 py-1 text-xs font-bold text-foreground">
-                  Planned
+                  Ready
                 </dd>
               </div>
             </dl>
@@ -106,9 +106,9 @@ export default function HomePage() {
           </div>
           <div className="grid gap-5 text-base leading-7 text-foreground/70 sm:grid-cols-2">
             <p>
-              This frontend intentionally contains no inherited dashboard, authentication, or study
-              behavior. The first local contract now reports whether Django and PostgreSQL are
-              ready.
+              This frontend contains no inherited dashboard or study behavior. Clean learner
+              accounts now use Django sessions, normalized email identities, and explicit CSRF
+              protection.
             </p>
             <p>
               The typed boundary is generated from Django&apos;s OpenAPI document and keeps expected

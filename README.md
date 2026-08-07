@@ -6,9 +6,9 @@ local-only cold rebuild: the previous prototype is retired, and Milestone 1 is
 not a generally available product.
 
 The current foundation includes a supported Django/PostgreSQL backend, a clean
-Next.js application shell, and a generated typed readiness path between them.
-Authentication, study flows, progress views, hosted infrastructure, and
-deployment automation will be added through their own scoped issues.
+Next.js application shell, a generated typed API boundary, and email/password
+Learner Accounts backed by Django sessions. Study flows, progress views, hosted
+infrastructure, and deployment automation remain separately scoped work.
 
 ## Repository layout
 
@@ -19,7 +19,7 @@ deployment automation will be added through their own scoped issues.
 ## Supported runtimes
 
 - Python 3.14.6, pinned in `.python-version`
-- Node.js 24.18.x LTS, pinned in `.nvmrc`
+- Node.js 24.19.x LTS, pinned in `.nvmrc`
 - npm 11
 - PostgreSQL for the Django database
 
@@ -35,10 +35,15 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:3000>. The readiness card calls the local Django service
+Open <http://localhost:3000>. The readiness card and account screens call the local Django service
 configured by `NEXT_PUBLIC_API_BASE_URL`; it remains usable and offers a manual
 retry when Django or PostgreSQL is unavailable. See `gre-vocab-front-end/README.md`
 for its supported stack, boundaries, and quality commands.
+
+Keep the frontend and API hostnames paired: use `localhost:3000` with
+`localhost:8000`, or `127.0.0.1:3000` with `127.0.0.1:8000`. Although both
+origins are allowed locally, mixing the hostname forms makes them different
+sites and prevents the `SameSite=Lax` session cookie from being sent.
 
 ## Backend setup
 
@@ -69,10 +74,10 @@ The process document and database-aware readiness endpoint should respond
 locally:
 
 ```bash
-curl --fail-with-body http://127.0.0.1:8000/api/
+curl --fail-with-body http://localhost:8000/api/
 # {"service":"crack-gre-vocab-api"}
 
-curl --fail-with-body http://127.0.0.1:8000/api/readiness/
+curl --fail-with-body http://localhost:8000/api/readiness/
 # {"status":"ready","database":"available"}
 ```
 
@@ -80,6 +85,23 @@ curl --fail-with-body http://127.0.0.1:8000/api/readiness/
 503 with a generic unavailable document when PostgreSQL cannot answer, without
 exposing connection details. The raw OpenAPI document is available at
 `/api/schema/`.
+
+## Learner account contract
+
+Create an account at <http://localhost:3000/sign-up>, sign in at
+<http://localhost:3000/sign-in>, and inspect or end the current session at
+<http://localhost:3000/account>. Django stores password hashes and session
+state; the browser stores no bearer credential. Every unsafe request first
+obtains a masked CSRF token and sends it with the credentialed request.
+
+For the private Milestone 1 UX, signup reports that an email already exists so
+a learner can correct an accidental repeat signup. This deliberately reveals
+account existence. Request throttling and reconsideration of that disclosure
+belong to pre-GA security hardening, before the app is publicly reachable.
+
+`LearnerAccount` is the first clean account schema. If an older local foundation
+database was migrated before this model existed, recreate the empty local
+database; no prototype user or authentication migration is supported.
 
 ## Quality checks
 
@@ -95,9 +117,9 @@ npm run build
 Run backend checks from `crackGreVocab/` with the virtual environment active:
 
 ```bash
-ruff check api crackGreVocab tests manage.py
-mypy api crackGreVocab tests manage.py
-python -m compileall -q api crackGreVocab tests manage.py
+ruff check accounts api crackGreVocab tests manage.py
+mypy accounts api crackGreVocab tests manage.py
+python -m compileall -q accounts api crackGreVocab tests manage.py
 python -m pip check
 python manage.py check --database default
 python manage.py makemigrations --check --dry-run
@@ -124,11 +146,15 @@ both artifacts when an API change is intentional.
 ## Local full-stack smoke
 
 With PostgreSQL, Django, and Next.js running as described above, open
-<http://127.0.0.1:3000> and confirm the readiness card announces `Backend and
+<http://localhost:3000> and confirm the readiness card announces `Backend and
 database ready`. Stop PostgreSQL and choose `Try again` to confirm the generic
 database-unavailable state, then restart PostgreSQL and retry to confirm
 recovery. This exercises the browser, exact local-origin CORS policy, Django,
 and PostgreSQL without introducing hosted infrastructure.
+
+For the account smoke, create a learner, reload `/account` to confirm session
+restoration, sign out and confirm the protected page returns to sign in, then
+sign in again with the same normalized email identity.
 
 ## Milestone 1 boundaries
 
@@ -137,6 +163,6 @@ will audit and normalize it, then enrich definitions and examples through free
 public APIs as an offline build step. The application will use repository-owned
 database content at runtime rather than depend on those APIs.
 
-Vercel, preview deployments, CI/CD, public domains, legacy migrations, and
-legacy authentication are intentionally out of scope until the rebuild is ready
-to launch.
+Google sign-in, password recovery, email verification delivery, Vercel, preview
+deployments, CI/CD, public domains, legacy migrations, and legacy authentication
+are intentionally out of scope until their dedicated milestones.

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AuthNavigation } from "@/components/auth/auth-navigation";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 
 const navigation = [
@@ -38,6 +39,7 @@ export function SiteHeader() {
               </Link>
             ))}
           </nav>
+          <AuthNavigation />
           <ThemeSwitcher />
         </div>
       </div>

@@ -37,6 +37,7 @@ except ValueError as exc:
 DATABASES = {"default": database}
 
 INSTALLED_APPS = [
+    "accounts.apps.AccountsConfig",
     "api.apps.ApiConfig",
     "corsheaders",
     "rest_framework",
@@ -99,9 +100,11 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+AUTH_USER_MODEL = "accounts.LearnerAccount"
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework.authentication.SessionAuthentication",
+        "accounts.authentication.CsrfEnforcedSessionAuthentication",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
@@ -125,7 +128,11 @@ CORS_ALLOWED_ORIGINS = env_list(
     else (),
 )
 CORS_URLS_REGEX = r"^/api/.*$"
-CORS_ALLOW_CREDENTIALS = False
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = env_list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=CORS_ALLOWED_ORIGINS if DEBUG else (),
+)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -139,6 +146,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 14
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_SAVE_EVERY_REQUEST = False
+CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=not DEBUG)
