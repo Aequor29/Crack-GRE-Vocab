@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "vocabulary.apps.VocabularyConfig",
+    "study.apps.StudyConfig",
 ]
 
 MIDDLEWARE = [
