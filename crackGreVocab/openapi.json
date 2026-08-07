@@ -426,6 +426,131 @@
                 }
             }
         },
+        "/api/study/sessions/{session_id}/items/{item_id}/answer/": {
+            "post": {
+                "operationId": "study_session_answer_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "item_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "session_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "study"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecordRecallAnswerRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyAnswerResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyAnswerResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "415": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/study/sessions/active/": {
             "get": {
                 "operationId": "study_session_active_retrieve",
@@ -585,6 +710,14 @@
                     "id"
                 ]
             },
+            "RatingEnum": {
+                "enum": [
+                    "remembered",
+                    "forgot"
+                ],
+                "type": "string",
+                "description": "* `remembered` - Remembered\n* `forgot` - Forgot"
+            },
             "Readiness": {
                 "type": "object",
                 "description": "Describe the stable ready or database-unavailable response shape.",
@@ -608,6 +741,110 @@
                 ],
                 "type": "string",
                 "description": "* `ready` - ready\n* `unavailable` - unavailable"
+            },
+            "RecallAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "item_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "client_request_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "rating": {
+                        "$ref": "#/components/schemas/RatingEnum"
+                    },
+                    "submitted_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "accepted_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "accepted_at",
+                    "client_request_id",
+                    "id",
+                    "item_id",
+                    "rating",
+                    "submitted_at"
+                ]
+            },
+            "RecallOutcome": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "review_number": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "scheduler_version": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "previous_phase": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "next_phase": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "previous_due_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "next_due_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "occurred_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "id",
+                    "next_due_at",
+                    "next_phase",
+                    "occurred_at",
+                    "previous_phase",
+                    "review_number",
+                    "scheduler_version"
+                ]
+            },
+            "RecordRecallAnswerRequest": {
+                "type": "object",
+                "properties": {
+                    "client_request_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "rating": {
+                        "$ref": "#/components/schemas/RatingEnum"
+                    }
+                },
+                "required": [
+                    "client_request_id",
+                    "rating"
+                ]
             },
             "ServiceIndex": {
                 "type": "object",
@@ -669,11 +906,44 @@
                     "password"
                 ]
             },
+            "StudyAnswerResponse": {
+                "type": "object",
+                "properties": {
+                    "answer": {
+                        "$ref": "#/components/schemas/RecallAnswer"
+                    },
+                    "outcome": {
+                        "$ref": "#/components/schemas/RecallOutcome"
+                    },
+                    "session": {
+                        "$ref": "#/components/schemas/StudySession"
+                    },
+                    "replayed": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "answer",
+                    "outcome",
+                    "replayed",
+                    "session"
+                ]
+            },
             "StudyPlanningError": {
                 "type": "object",
                 "properties": {
+                    "code": {
+                        "type": "string"
+                    },
                     "detail": {
                         "type": "string"
+                    },
+                    "current_item_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "retryable": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
@@ -744,6 +1014,28 @@
                         "format": "date-time",
                         "readOnly": true
                     },
+                    "ended_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "answered_count": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "remaining_count": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "current_item": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StudySessionItem"
+                            }
+                        ],
+                        "nullable": true,
+                        "readOnly": true
+                    },
                     "items": {
                         "type": "array",
                         "items": {
@@ -753,14 +1045,17 @@
                     }
                 },
                 "required": [
+                    "answered_count",
                     "corpus_version",
                     "created_at",
+                    "current_item",
                     "id",
                     "item_count",
                     "items",
                     "new_word_target",
                     "planned_new_word_count",
                     "planner_version",
+                    "remaining_count",
                     "status"
                 ]
             },
@@ -826,7 +1121,19 @@
                     "detail": {
                         "type": "string"
                     },
+                    "client_request_id": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
                     "new_word_target": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "rating": {
                         "type": "array",
                         "items": {
                             "type": "string"

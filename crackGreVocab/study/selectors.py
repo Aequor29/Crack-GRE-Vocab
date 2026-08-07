@@ -1,20 +1,25 @@
 """Read-only ORM queries for the Study domain."""
 
 from datetime import datetime
+from uuid import UUID
 
 from accounts.models import LearnerAccount
+from django.db.models import Prefetch
 from vocabulary.models import CorpusEntry, CorpusVersion
 
-from .models import LearnerWordState, StudySession
+from .models import LearnerWordState, RecallAnswer, StudySession, StudySessionItem
 
 type DueItem = tuple[LearnerWordState, CorpusEntry]
 
 
 def session_queryset():
     """Load the stable response representation without per-item queries."""
+    items = StudySessionItem.objects.select_related(
+        "corpus_entry__word",
+        "answer__outcome",
+    ).prefetch_related("corpus_entry__senses")
     return StudySession.objects.select_related("corpus").prefetch_related(
-        "items__corpus_entry__word",
-        "items__corpus_entry__senses",
+        Prefetch("items", queryset=items),
     )
 
 
@@ -32,6 +37,18 @@ def get_active_session(*, learner: LearnerAccount) -> StudySession | None:
 
 def get_active_corpus() -> CorpusVersion | None:
     return CorpusVersion.objects.filter(is_active=True).first()
+
+
+def get_answer_by_request_id(*, request_id: UUID) -> RecallAnswer | None:
+    return (
+        RecallAnswer.objects.select_related("item__session", "outcome")
+        .filter(client_request_id=request_id)
+        .first()
+    )
+
+
+def get_item_answer(*, item: StudySessionItem) -> RecallAnswer | None:
+    return RecallAnswer.objects.select_related("outcome").filter(item=item).first()
 
 
 def select_due_items(

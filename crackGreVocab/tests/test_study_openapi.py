@@ -15,6 +15,9 @@ class StudyOpenApiTests(SimpleTestCase):
         paths = response.json()["paths"]
         create = paths["/api/study/sessions/"]["post"]
         active = paths["/api/study/sessions/active/"]["get"]
+        answer = paths["/api/study/sessions/{session_id}/items/{item_id}/answer/"][
+            "post"
+        ]
         self.assertEqual(create["operationId"], "study_session_create")
         self.assertEqual(
             set(create["responses"]),
@@ -22,3 +25,8 @@ class StudyOpenApiTests(SimpleTestCase):
         )
         self.assertEqual(active["operationId"], "study_session_active_retrieve")
         self.assertEqual(set(active["responses"]), {"200", "403", "404"})
+        self.assertEqual(answer["operationId"], "study_session_answer_create")
+        self.assertEqual(
+            set(answer["responses"]),
+            {"200", "201", "400", "403", "404", "409", "415", "503"},
+        )

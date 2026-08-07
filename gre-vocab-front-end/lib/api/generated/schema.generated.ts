@@ -24,6 +24,12 @@ export type StudySessionStatusEnum = "active" | "completed" | "abandoned";
 export type ReadinessStatusEnum = "ready" | "unavailable";
 
 /**
+ * * `remembered` - Remembered
+ * * `forgot` - Forgot
+ */
+export type RatingEnum = "remembered" | "forgot";
+
+/**
  * * `due` - Due review
  * * `new` - New Word
  */
@@ -87,6 +93,54 @@ export interface Readiness {
   database: DatabaseEnum;
 }
 
+export interface RecallAnswer {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  item_id: string;
+  /** @format uuid */
+  client_request_id: string;
+  /**
+   * * `remembered` - Remembered
+   * * `forgot` - Forgot
+   */
+  rating: RatingEnum;
+  /** @format date-time */
+  submitted_at: string;
+  /** @format date-time */
+  accepted_at: string;
+}
+
+export interface RecallOutcome {
+  /** @format uuid */
+  id: string;
+  /**
+   * @min 0
+   * @max 2147483647
+   */
+  review_number: number;
+  /** @maxLength 64 */
+  scheduler_version: string;
+  previous_phase: string;
+  next_phase: string;
+  /** @format date-time */
+  previous_due_at?: string | null;
+  /** @format date-time */
+  next_due_at: string;
+  /** @format date-time */
+  occurred_at: string;
+}
+
+export interface RecordRecallAnswerRequest {
+  /** @format uuid */
+  client_request_id: string;
+  /**
+   * * `remembered` - Remembered
+   * * `forgot` - Forgot
+   */
+  rating: RatingEnum;
+}
+
 /** Describe the database-independent service document. */
 export interface ServiceIndex {
   service: string;
@@ -121,8 +175,19 @@ export interface SignUpRequest {
   password: string;
 }
 
+export interface StudyAnswerResponse {
+  answer: RecallAnswer;
+  outcome: RecallOutcome;
+  session: StudySession;
+  replayed: boolean;
+}
+
 export interface StudyPlanningError {
+  code?: string;
   detail: string;
+  /** @format uuid */
+  current_item_id?: string;
+  retryable?: boolean;
 }
 
 export interface StudySense {
@@ -166,6 +231,11 @@ export interface StudySession {
   planner_version: string;
   /** @format date-time */
   created_at: string;
+  /** @format date-time */
+  ended_at?: string | null;
+  answered_count: number;
+  remaining_count: number;
+  current_item: StudySessionItem | null;
   items: StudySessionItem[];
 }
 
@@ -191,5 +261,7 @@ export interface StudySessionItem {
 
 export interface StudyValidationError {
   detail?: string;
+  client_request_id?: string[];
   new_word_target?: string[];
+  rating?: string[];
 }
