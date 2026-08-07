@@ -3,6 +3,7 @@
 
 :root {
   --accent: oklch(0.53 0.2 278);
+  --accent-foreground: oklch(0.99 0 0);
   --radius: 0.85rem;
   --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
@@ -10,6 +11,7 @@
 .dark,
 [data-theme="dark"] {
   --accent: oklch(0.74 0.15 278);
+  --accent-foreground: oklch(0.14 0.02 278);
 }
 
 * {
