@@ -1,0 +1,94 @@
+"""Authenticated Study Session planning and resume endpoints."""
+
+from django.db import DatabaseError
+from drf_spectacular.utils import extend_schema
+from rest_framework.parsers import JSONParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import JSONRenderer
+from rest_framework.response import Response
+from rest_framework.status import (
+    HTTP_200_OK,
+    HTTP_201_CREATED,
+    HTTP_404_NOT_FOUND,
+    HTTP_409_CONFLICT,
+    HTTP_503_SERVICE_UNAVAILABLE,
+)
+from rest_framework.views import APIView
+
+from .serializers import (
+    CreateStudySessionSerializer,
+    StudyPlanningErrorSerializer,
+    StudySessionSerializer,
+    StudyValidationErrorSerializer,
+)
+from .services import StudyPlanningUnavailable, get_active_session, plan_study_session
+
+
+class StudyApiView(APIView):
+    parser_classes = (JSONParser,)
+    renderer_classes = (JSONRenderer,)
+    permission_classes = (IsAuthenticated,)
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        finalized = super().finalize_response(request, response, *args, **kwargs)
+        finalized["Cache-Control"] = "no-store"
+        return finalized
+
+
+class StudySessionCollectionView(StudyApiView):
+    http_method_names = ["post", "options"]
+
+    @extend_schema(
+        operation_id="study_session_create",
+        request=CreateStudySessionSerializer,
+        responses={
+            200: StudySessionSerializer,
+            201: StudySessionSerializer,
+            400: StudyValidationErrorSerializer,
+            403: StudyPlanningErrorSerializer,
+            409: StudyPlanningErrorSerializer,
+            415: StudyPlanningErrorSerializer,
+            503: StudyPlanningErrorSerializer,
+        },
+    )
+    def post(self, request) -> Response:
+        serializer = CreateStudySessionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            planned = plan_study_session(
+                learner=request.user,
+                new_word_target=serializer.validated_data["new_word_target"],
+            )
+        except StudyPlanningUnavailable as exc:
+            return Response({"detail": str(exc)}, status=HTTP_409_CONFLICT)
+        except DatabaseError:
+            return Response(
+                {"detail": "The Study Session could not be persisted."},
+                status=HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(
+            StudySessionSerializer(planned.session).data,
+            status=HTTP_201_CREATED if planned.created else HTTP_200_OK,
+        )
+
+
+class ActiveStudySessionView(StudyApiView):
+    http_method_names = ["get", "head", "options"]
+
+    @extend_schema(
+        operation_id="study_session_active_retrieve",
+        responses={
+            200: StudySessionSerializer,
+            403: StudyPlanningErrorSerializer,
+            404: StudyPlanningErrorSerializer,
+        },
+    )
+    def get(self, request) -> Response:
+        session = get_active_session(learner=request.user)
+        if session is None:
+            return Response(
+                {"detail": "No active Study Session exists."},
+                status=HTTP_404_NOT_FOUND,
+            )
+        return Response(StudySessionSerializer(session).data, status=HTTP_200_OK)

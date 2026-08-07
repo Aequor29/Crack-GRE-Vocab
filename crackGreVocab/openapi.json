@@ -330,6 +330,146 @@
                     }
                 }
             }
+        },
+        "/api/study/sessions/": {
+            "post": {
+                "operationId": "study_session_create",
+                "tags": [
+                    "study"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateStudySessionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudySession"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudySession"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "415": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/study/sessions/active/": {
+            "get": {
+                "operationId": "study_session_active_retrieve",
+                "tags": [
+                    "study"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudySession"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StudyPlanningError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -379,6 +519,19 @@
                     }
                 }
             },
+            "CreateStudySessionRequest": {
+                "type": "object",
+                "properties": {
+                    "new_word_target": {
+                        "type": "integer",
+                        "maximum": 20,
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "new_word_target"
+                ]
+            },
             "CsrfToken": {
                 "type": "object",
                 "description": "Return a masked CSRF token for one unsafe request.",
@@ -398,6 +551,14 @@
                 ],
                 "type": "string",
                 "description": "* `available` - available\n* `unavailable` - unavailable"
+            },
+            "KindEnum": {
+                "enum": [
+                    "due",
+                    "new"
+                ],
+                "type": "string",
+                "description": "* `due` - Due review\n* `new` - New Word"
             },
             "LearnerAccount": {
                 "type": "object",
@@ -429,7 +590,7 @@
                 "description": "Describe the stable ready or database-unavailable response shape.",
                 "properties": {
                     "status": {
-                        "$ref": "#/components/schemas/StatusEnum"
+                        "$ref": "#/components/schemas/ReadinessStatusEnum"
                     },
                     "database": {
                         "$ref": "#/components/schemas/DatabaseEnum"
@@ -439,6 +600,14 @@
                     "database",
                     "status"
                 ]
+            },
+            "ReadinessStatusEnum": {
+                "enum": [
+                    "ready",
+                    "unavailable"
+                ],
+                "type": "string",
+                "description": "* `ready` - ready\n* `unavailable` - unavailable"
             },
             "ServiceIndex": {
                 "type": "object",
@@ -500,13 +669,170 @@
                     "password"
                 ]
             },
-            "StatusEnum": {
+            "StudyPlanningError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "StudySense": {
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0
+                    },
+                    "part_of_speech": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "definition": {
+                        "type": "string"
+                    },
+                    "example": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "definition",
+                    "example",
+                    "position"
+                ]
+            },
+            "StudySession": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/StudySessionStatusEnum"
+                    },
+                    "corpus_version": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "new_word_target": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0
+                    },
+                    "planned_new_word_count": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0
+                    },
+                    "item_count": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0
+                    },
+                    "planner_version": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StudySessionItem"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "corpus_version",
+                    "created_at",
+                    "id",
+                    "item_count",
+                    "items",
+                    "new_word_target",
+                    "planned_new_word_count",
+                    "planner_version",
+                    "status"
+                ]
+            },
+            "StudySessionItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "position": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/KindEnum"
+                    },
+                    "word_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "term": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "pronunciation": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "senses": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StudySense"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind",
+                    "position",
+                    "pronunciation",
+                    "senses",
+                    "term",
+                    "word_id"
+                ]
+            },
+            "StudySessionStatusEnum": {
                 "enum": [
-                    "ready",
-                    "unavailable"
+                    "active",
+                    "completed",
+                    "abandoned"
                 ],
                 "type": "string",
-                "description": "* `ready` - ready\n* `unavailable` - unavailable"
+                "description": "* `active` - Active\n* `completed` - Completed\n* `abandoned` - Abandoned"
+            },
+            "StudyValidationError": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    },
+                    "new_word_target": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
             }
         },
         "securitySchemes": {

@@ -11,10 +11,23 @@
  */
 
 /**
+ * * `active` - Active
+ * * `completed` - Completed
+ * * `abandoned` - Abandoned
+ */
+export type StudySessionStatusEnum = "active" | "completed" | "abandoned";
+
+/**
  * * `ready` - ready
  * * `unavailable` - unavailable
  */
-export type StatusEnum = "ready" | "unavailable";
+export type ReadinessStatusEnum = "ready" | "unavailable";
+
+/**
+ * * `due` - Due review
+ * * `new` - New Word
+ */
+export type KindEnum = "due" | "new";
 
 /**
  * * `available` - available
@@ -34,6 +47,14 @@ export interface AuthValidationError {
   display_name?: string[];
   password?: string[];
   non_field_errors?: string[];
+}
+
+export interface CreateStudySessionRequest {
+  /**
+   * @min 0
+   * @max 20
+   */
+  new_word_target: number;
 }
 
 /** Return a masked CSRF token for one unsafe request. */
@@ -58,7 +79,7 @@ export interface Readiness {
    * * `ready` - ready
    * * `unavailable` - unavailable
    */
-  status: StatusEnum;
+  status: ReadinessStatusEnum;
   /**
    * * `available` - available
    * * `unavailable` - unavailable
@@ -98,4 +119,77 @@ export interface SignUpRequest {
   display_name: string;
   /** @minLength 1 */
   password: string;
+}
+
+export interface StudyPlanningError {
+  detail: string;
+}
+
+export interface StudySense {
+  /**
+   * @min 0
+   * @max 32767
+   */
+  position: number;
+  /** @maxLength 32 */
+  part_of_speech?: string;
+  definition: string;
+  example: string;
+}
+
+export interface StudySession {
+  /** @format uuid */
+  id: string;
+  /**
+   * * `active` - Active
+   * * `completed` - Completed
+   * * `abandoned` - Abandoned
+   */
+  status: StudySessionStatusEnum;
+  corpus_version: string;
+  /**
+   * @min 0
+   * @max 32767
+   */
+  new_word_target: number;
+  /**
+   * @min 0
+   * @max 32767
+   */
+  planned_new_word_count: number;
+  /**
+   * @min 0
+   * @max 32767
+   */
+  item_count: number;
+  /** @maxLength 64 */
+  planner_version: string;
+  /** @format date-time */
+  created_at: string;
+  items: StudySessionItem[];
+}
+
+export interface StudySessionItem {
+  /** @format uuid */
+  id: string;
+  /**
+   * @min 0
+   * @max 32767
+   */
+  position: number;
+  /**
+   * * `due` - Due review
+   * * `new` - New Word
+   */
+  kind: KindEnum;
+  /** @format uuid */
+  word_id: string;
+  term: string;
+  pronunciation: string;
+  senses: StudySense[];
+}
+
+export interface StudyValidationError {
+  detail?: string;
+  new_word_target?: string[];
 }
