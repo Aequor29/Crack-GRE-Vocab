@@ -25,6 +25,8 @@ djangorestframework==3.17.1
     #   drf-spectacular
 drf-spectacular==0.30.0
     # via -r requirements.in
+fsrs==6.3.1
+    # via -r requirements.in
 inflection==0.5.1
     # via drf-spectacular
 jsonschema==4.26.0
@@ -49,5 +51,7 @@ rpds-py==2026.6.3
     #   referencing
 sqlparse==0.5.5
     # via django
+typing-extensions==4.16.0
+    # via fsrs
 uritemplate==4.2.0
     # via drf-spectacular
