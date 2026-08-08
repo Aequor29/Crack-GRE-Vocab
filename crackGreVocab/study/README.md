@@ -29,19 +29,29 @@ will add the dedicated concurrent-request and retry contract.
 
 ## Scheduling boundary
 
-The models can retain versioned FSRS inputs and transitions, but AEQ-13 and
-AEQ-14 do not score answers. AEQ-15 owns accepted self-grades, FSRS adapter
-behavior, Recall Outcomes, and current-state updates. Browser code never
-reconstructs planning or scheduling rules.
+`m1-fsrs-6.3.1-binary-v1` is the first accepted Recall Outcome policy. It pins
+py-fsrs 6.3.1 behind `scheduling.py`, maps Remembered to Good and Forgot to
+Again, uses 90% desired retention, one- and ten-minute learning steps, one
+ten-minute relearning step, a 36,500-day maximum interval, and disables
+fuzzing. Every transition receives one explicit server UTC instant and stores
+the complete serialized card state. Browser code never reconstructs planning
+or scheduling rules.
+
+Only a Review-phase Forgot increments the lapse count. A new or learning Word
+still receives the appropriate failed-recall transition without being counted
+as a review lapse.
 
 ## API
 
 - `POST /api/study/sessions/` with `{"new_word_target": number}` creates a
   session (`201`) or resumes the active session (`200`).
 - `GET /api/study/sessions/active/` returns the current active session or `404`.
+- `POST /api/study/sessions/{session_id}/items/{item_id}/answer/` with a stable
+  `client_request_id` and `remembered` or `forgot` rating records one Recall
+  Outcome (`201`) or returns the exact accepted replay (`200`).
 
-Both endpoints require the Django session. Creation also requires the CSRF
-cookie and masked `X-CSRFToken` issued by `GET /api/auth/csrf/`.
+All endpoints require the Django session. Mutations also require the CSRF cookie
+and masked `X-CSRFToken` issued by `GET /api/auth/csrf/`.
 
 ## Code boundaries
 
@@ -50,4 +60,6 @@ cookie and masked `X-CSRFToken` issued by `GET /api/auth/csrf/`.
   the transaction boundary.
 - `services.py` owns product policy, business exceptions, and transactional
   orchestration.
+- `scheduling.py` owns the pure, versioned FSRS adapter and contains no ORM
+  access.
 - `models.py` owns durable relationships and database constraints.

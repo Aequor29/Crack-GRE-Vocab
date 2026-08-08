@@ -18,11 +18,20 @@ from rest_framework.views import APIView
 from .selectors import get_active_session
 from .serializers import (
     CreateStudySessionSerializer,
+    RecordRecallAnswerSerializer,
+    StudyAnswerResponseSerializer,
     StudyPlanningErrorSerializer,
     StudySessionSerializer,
     StudyValidationErrorSerializer,
 )
-from .services import StudyPlanningUnavailable, plan_study_session
+from .services import (
+    StudyAnswerConflict,
+    StudyAnswerNotFound,
+    StudyAnswerUnavailable,
+    StudyPlanningUnavailable,
+    plan_study_session,
+    record_recall_answer,
+)
 
 
 class StudyApiView(APIView):
@@ -93,3 +102,74 @@ class ActiveStudySessionView(StudyApiView):
                 status=HTTP_404_NOT_FOUND,
             )
         return Response(StudySessionSerializer(session).data, status=HTTP_200_OK)
+
+
+class StudySessionAnswerView(StudyApiView):
+    http_method_names = ["post", "options"]
+
+    @extend_schema(
+        operation_id="study_session_answer_create",
+        request=RecordRecallAnswerSerializer,
+        responses={
+            200: StudyAnswerResponseSerializer,
+            201: StudyAnswerResponseSerializer,
+            400: StudyValidationErrorSerializer,
+            403: StudyPlanningErrorSerializer,
+            404: StudyPlanningErrorSerializer,
+            409: StudyPlanningErrorSerializer,
+            415: StudyPlanningErrorSerializer,
+            503: StudyPlanningErrorSerializer,
+        },
+    )
+    def post(self, request, session_id, item_id) -> Response:
+        serializer = RecordRecallAnswerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            recorded = record_recall_answer(
+                learner=request.user,
+                session_id=session_id,
+                item_id=item_id,
+                request_id=serializer.validated_data["client_request_id"],
+                rating=serializer.validated_data["rating"],
+            )
+        except StudyAnswerNotFound as exc:
+            return Response(
+                {"code": "study_item_not_found", "detail": str(exc)},
+                status=HTTP_404_NOT_FOUND,
+            )
+        except StudyAnswerConflict as exc:
+            payload: dict[str, object] = {"code": exc.code, "detail": exc.detail}
+            if exc.current_item_id is not None:
+                payload["current_item_id"] = exc.current_item_id
+            return Response(payload, status=HTTP_409_CONFLICT)
+        except StudyAnswerUnavailable:
+            return Response(
+                {
+                    "code": "study_temporarily_unavailable",
+                    "detail": "The Recall Outcome could not be scheduled safely.",
+                    "retryable": True,
+                },
+                status=HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except DatabaseError:
+            return Response(
+                {
+                    "code": "study_temporarily_unavailable",
+                    "detail": "The Recall Outcome could not be persisted.",
+                    "retryable": True,
+                },
+                status=HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        response = StudyAnswerResponseSerializer(
+            {
+                "answer": recorded.answer,
+                "outcome": recorded.outcome,
+                "session": recorded.session,
+                "replayed": not recorded.created,
+            }
+        )
+        return Response(
+            response.data,
+            status=HTTP_201_CREATED if recorded.created else HTTP_200_OK,
+        )
