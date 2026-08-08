@@ -60,13 +60,16 @@ class StudySessionSerializer(serializers.ModelSerializer):
         return [item for item in session.items.all() if not hasattr(item, "answer")]
 
     def get_answered_count(self, session: StudySession) -> int:
+        """Return how many planned items have accepted answers."""
         return session.item_count - len(self._unanswered_items(session))
 
     def get_remaining_count(self, session: StudySession) -> int:
+        """Return how many planned items still need an accepted answer."""
         return len(self._unanswered_items(session))
 
     @extend_schema_field(StudySessionItemSerializer(allow_null=True))
     def get_current_item(self, session: StudySession) -> dict[str, object] | None:
+        """Serialize the first unanswered item in the backend-planned order."""
         unanswered = self._unanswered_items(session)
         if not unanswered:
             return None

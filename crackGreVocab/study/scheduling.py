@@ -62,6 +62,8 @@ class SchedulingStateError(ValueError):
 
 @dataclass(frozen=True)
 class SchedulerTransition:
+    """The deterministic scheduling state produced by one recall grade."""
+
     scheduler_version: str
     next_phase: str
     next_due_at: datetime
@@ -70,17 +72,17 @@ class SchedulerTransition:
     stability: Decimal | None
 
 
-def _utc(value: datetime) -> datetime:
+def _require_utc_datetime(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise SchedulingStateError("Scheduler instants must be timezone-aware.")
     return value.astimezone(UTC)
 
 
-def _decimal(value: float | None) -> Decimal | None:
+def _decimal_from_float(value: float | None) -> Decimal | None:
     return Decimal(str(value)) if value is not None else None
 
 
-def _restore_card(
+def _restore_fsrs_card(
     *,
     word_id: UUID,
     scheduler_version: str,
@@ -113,13 +115,13 @@ def schedule_recall(
     except KeyError as exc:
         raise ValueError("rating must be remembered or forgot.") from exc
 
-    occurred_at = _utc(occurred_at)
+    occurred_at = _require_utc_datetime(occurred_at)
     if previous_state is None:
         card = Card(card_id=word_id.int, due=occurred_at)
     else:
         if previous_scheduler_version is None:
             raise SchedulingStateError("Stored scheduler state has no version.")
-        card = _restore_card(
+        card = _restore_fsrs_card(
             word_id=word_id,
             scheduler_version=previous_scheduler_version,
             state=previous_state,
@@ -135,6 +137,6 @@ def schedule_recall(
         next_phase=_PHASES[next_card.state],
         next_due_at=next_card.due,
         next_state=dict(next_card.to_dict()),
-        difficulty=_decimal(next_card.difficulty),
-        stability=_decimal(next_card.stability),
+        difficulty=_decimal_from_float(next_card.difficulty),
+        stability=_decimal_from_float(next_card.stability),
     )

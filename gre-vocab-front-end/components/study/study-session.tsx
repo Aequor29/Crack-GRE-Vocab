@@ -23,7 +23,7 @@ import {
   savePendingAnswer,
 } from "@/lib/study/pending-answer";
 
-function errorNotice(error: unknown): StudyNotice {
+function studyNoticeFromError(error: unknown): StudyNotice {
   if (error instanceof StudyApiError) {
     return { message: error.message, retryable: error.retryable };
   }
@@ -46,7 +46,7 @@ export function StudySession() {
   const [notice, setNotice] = useState<StudyNotice | null>(null);
   const termHeading = useRef<HTMLHeadingElement>(null);
 
-  const restoreSession = useCallback(
+  const restoreStudyProgress = useCallback(
     async (signal?: AbortSignal) => {
       if (!auth.account) {
         return;
@@ -76,7 +76,7 @@ export function StudySession() {
             !(error instanceof StudyApiError) ||
             !["conflict", "not-found"].includes(error.kind)
           ) {
-            setNotice(errorNotice(error));
+            setNotice(studyNoticeFromError(error));
             setLoading(false);
             return;
           }
@@ -93,7 +93,7 @@ export function StudySession() {
         }
       } catch (error) {
         if (!signal?.aborted) {
-          setNotice(errorNotice(error));
+          setNotice(studyNoticeFromError(error));
         }
       } finally {
         if (!signal?.aborted) {
@@ -114,9 +114,9 @@ export function StudySession() {
       return;
     }
     const controller = new AbortController();
-    void restoreSession(controller.signal);
+    void restoreStudyProgress(controller.signal);
     return () => controller.abort();
-  }, [auth.account, auth.status, restoreSession, router]);
+  }, [auth.account, auth.status, restoreStudyProgress, router]);
 
   const currentItemId = session?.current_item?.id;
   useEffect(() => {
@@ -125,7 +125,7 @@ export function StudySession() {
     }
   }, [currentItemId]);
 
-  async function handleStart() {
+  async function startPlannedStudySession() {
     setStarting(true);
     setNotice(null);
     try {
@@ -133,19 +133,19 @@ export function StudySession() {
       setSession(created);
       setRevealed(false);
     } catch (error) {
-      setNotice(errorNotice(error));
+      setNotice(studyNoticeFromError(error));
     } finally {
       setStarting(false);
     }
   }
 
-  async function refreshAfterConflict() {
+  async function reloadAuthoritativeStudyProgress() {
     const active = await getActiveStudySession();
     setSession(active);
     setRevealed(false);
   }
 
-  async function sendAnswer(operation: PendingStudyAnswer) {
+  async function submitPendingRecallAnswer(operation: PendingStudyAnswer) {
     setSubmitting(true);
     setNotice(null);
     try {
@@ -159,23 +159,23 @@ export function StudySession() {
         clearPendingAnswer();
         setPending(null);
         try {
-          await refreshAfterConflict();
+          await reloadAuthoritativeStudyProgress();
           setNotice({
             message: "Your study progress changed elsewhere, so this page was refreshed.",
             retryable: false,
           });
         } catch (refreshError) {
-          setNotice(errorNotice(refreshError));
+          setNotice(studyNoticeFromError(refreshError));
         }
       } else {
-        setNotice(errorNotice(error));
+        setNotice(studyNoticeFromError(error));
       }
     } finally {
       setSubmitting(false);
     }
   }
 
-  function handleRating(rating: RecallRating) {
+  function recordRecallSelfGrade(rating: RecallRating) {
     if (!auth.account || !session?.current_item || pending) {
       return;
     }
@@ -186,7 +186,7 @@ export function StudySession() {
       sessionId: session.id,
     });
     setPending(operation);
-    void sendAnswer(operation);
+    void submitPendingRecallAnswer(operation);
   }
 
   if (auth.status === "checking" || loading) {
@@ -223,8 +223,8 @@ export function StudySession() {
       <StudySessionPlanner
         newWordTarget={newWordTarget}
         notice={notice}
-        onRestore={() => void restoreSession()}
-        onStart={() => void handleStart()}
+        onRestore={() => void restoreStudyProgress()}
+        onStart={() => void startPlannedStudySession()}
         onTargetChange={setNewWordTarget}
         starting={starting}
       />
@@ -248,8 +248,8 @@ export function StudySession() {
   return (
     <StudyCard
       notice={notice}
-      onRating={handleRating}
-      onRetry={() => pending && void sendAnswer(pending)}
+      onRating={recordRecallSelfGrade}
+      onRetry={() => pending && void submitPendingRecallAnswer(pending)}
       onReveal={() => setRevealed(true)}
       pending={pending}
       revealed={revealed}

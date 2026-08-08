@@ -168,7 +168,7 @@ class RecallAnswerServiceTests(TestCase):
 
         with (
             patch(
-                "study.services.create_recall_records",
+                "study.services.persist_recall_answer_transition",
                 side_effect=DatabaseError("simulated persistence failure"),
             ),
             self.assertRaises(DatabaseError),

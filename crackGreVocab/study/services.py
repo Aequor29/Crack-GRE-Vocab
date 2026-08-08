@@ -17,25 +17,25 @@ from .models import (
     StudySessionItem,
 )
 from .persistence import (
-    complete_session,
-    create_recall_records,
-    create_session_plan,
     lock_current_session_item,
     lock_learner,
     lock_session,
     lock_session_item,
     lock_word_state,
+    mark_study_session_completed,
+    persist_recall_answer_transition,
+    persist_study_session_plan,
 )
 from .scheduling import SchedulingStateError, schedule_recall
 from .selectors import (
     DueItem,
-    get_active_corpus,
-    get_active_session,
-    get_answer_by_request_id,
-    get_item_answer,
-    get_session,
-    select_due_items,
-    select_new_entries,
+    get_active_corpus_version,
+    get_active_study_session,
+    get_recall_answer_by_request_id,
+    get_recall_answer_for_item,
+    get_study_session,
+    select_due_study_items,
+    select_unseen_corpus_entries,
 )
 
 PLANNER_VERSION = "m1-due-first-v1"
@@ -79,12 +79,16 @@ class StudyPlanPolicy:
 
 @dataclass(frozen=True)
 class PlannedSession:
+    """A newly persisted or resumed Study Session."""
+
     session: StudySession
     created: bool
 
 
 @dataclass(frozen=True)
 class RecordedRecall:
+    """The durable result of accepting or replaying a recall answer."""
+
     answer: RecallAnswer
     outcome: RecallOutcome
     session: StudySession
@@ -93,6 +97,8 @@ class RecordedRecall:
 
 @dataclass(frozen=True)
 class SelectedStudyItems:
+    """The due and unseen vocabulary selected for a new study plan."""
+
     due_items: tuple[DueItem, ...]
     new_entries: tuple[CorpusEntry, ...]
 
@@ -110,8 +116,8 @@ def _validate_new_word_target(
         )
 
 
-def _active_corpus() -> CorpusVersion:
-    corpus = get_active_corpus()
+def _require_active_corpus() -> CorpusVersion:
+    corpus = get_active_corpus_version()
     if corpus is None:
         raise StudyPlanningUnavailable("No active vocabulary corpus is available.")
     return corpus
@@ -125,13 +131,13 @@ def _select_session_items(
     policy: StudyPlanPolicy,
     planned_at: datetime,
 ) -> SelectedStudyItems:
-    due_items = select_due_items(
+    due_items = select_due_study_items(
         learner=learner,
         corpus=corpus,
         planned_at=planned_at,
         limit=policy.max_items,
     )
-    new_entries = select_new_entries(
+    new_entries = select_unseen_corpus_entries(
         learner=learner,
         corpus=corpus,
         limit=min(new_word_target, policy.max_items - len(due_items)),
@@ -139,7 +145,7 @@ def _select_session_items(
     return SelectedStudyItems(due_items=due_items, new_entries=new_entries)
 
 
-def _validate_item_state(
+def _validate_scheduling_snapshot(
     *,
     item: StudySessionItem,
     state: LearnerWordState | None,
@@ -163,7 +169,7 @@ def _validate_item_state(
         )
 
 
-def _existing_recall(
+def _find_exact_recall_replay(
     *,
     learner: LearnerAccount,
     session: StudySession,
@@ -171,7 +177,7 @@ def _existing_recall(
     request_id: UUID,
     rating: str,
 ) -> RecordedRecall | None:
-    existing = get_answer_by_request_id(request_id=request_id)
+    existing = get_recall_answer_by_request_id(request_id=request_id)
     if existing is None:
         return None
     if (
@@ -193,7 +199,7 @@ def _existing_recall(
     return RecordedRecall(
         answer=existing,
         outcome=outcome,
-        session=get_session(session_id=session.pk),
+        session=get_study_session(session_id=session.pk),
         created=False,
     )
 
@@ -220,7 +226,7 @@ def record_recall_answer(
     if item is None:
         raise StudyAnswerNotFound("The Study Session item was not found.")
 
-    replay = _existing_recall(
+    replay = _find_exact_recall_replay(
         learner=locked_learner,
         session=session,
         item=item,
@@ -235,7 +241,7 @@ def record_recall_answer(
             "study_session_inactive",
             "Only an active Study Session can accept an answer.",
         )
-    if get_item_answer(item=item) is not None:
+    if get_recall_answer_for_item(item=item) is not None:
         raise StudyAnswerConflict(
             "study_item_already_answered",
             "This Study Session item already has an accepted answer.",
@@ -254,7 +260,7 @@ def record_recall_answer(
         )
 
     state = lock_word_state(learner=locked_learner, item=item)
-    _validate_item_state(item=item, state=state)
+    _validate_scheduling_snapshot(item=item, state=state)
     occurred_at = occurred_at or timezone.now()
     try:
         transition = schedule_recall(
@@ -269,7 +275,7 @@ def record_recall_answer(
     except SchedulingStateError as exc:
         raise StudyAnswerUnavailable(str(exc)) from exc
 
-    answer, outcome, _ = create_recall_records(
+    answer, outcome, _ = persist_recall_answer_transition(
         learner=locked_learner,
         item=item,
         state=state,
@@ -279,12 +285,12 @@ def record_recall_answer(
         transition=transition,
     )
     if lock_current_session_item(session=session) is None:
-        complete_session(session=session, ended_at=occurred_at)
+        mark_study_session_completed(session=session, ended_at=occurred_at)
 
     return RecordedRecall(
         answer=answer,
         outcome=outcome,
-        session=get_session(session_id=session.pk),
+        session=get_study_session(session_id=session.pk),
         created=True,
     )
 
@@ -301,11 +307,11 @@ def plan_study_session(
     _validate_new_word_target(new_word_target, policy)
     planned_at = planned_at or timezone.now()
     locked_learner = lock_learner(learner_id=learner.pk)
-    active = get_active_session(learner=locked_learner)
+    active = get_active_study_session(learner=locked_learner)
     if active is not None:
         return PlannedSession(session=active, created=False)
 
-    corpus = _active_corpus()
+    corpus = _require_active_corpus()
     selection = _select_session_items(
         learner=locked_learner,
         corpus=corpus,
@@ -318,7 +324,7 @@ def plan_study_session(
             "No vocabulary items are eligible for a new Study Session."
         )
 
-    session = create_session_plan(
+    session = persist_study_session_plan(
         learner=locked_learner,
         corpus=corpus,
         new_word_target=new_word_target,
@@ -326,4 +332,7 @@ def plan_study_session(
         new_entries=selection.new_entries,
         planner_version=PLANNER_VERSION,
     )
-    return PlannedSession(session=get_session(session_id=session.pk), created=True)
+    return PlannedSession(
+        session=get_study_session(session_id=session.pk),
+        created=True,
+    )
