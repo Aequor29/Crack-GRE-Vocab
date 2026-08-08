@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AuthStatus } from "@/components/auth/auth-provider";
 import { StudySession } from "@/components/study/study-session";
 import type {
   StudyAnswerResponse,
@@ -21,7 +22,7 @@ const auth = vi.hoisted(() => ({
   signIn: vi.fn(),
   signOut: vi.fn(),
   signUp: vi.fn(),
-  status: "authenticated" as const,
+  status: "authenticated" as AuthStatus,
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
@@ -119,11 +120,23 @@ describe("study session experience", () => {
 
   beforeEach(() => {
     window.sessionStorage.clear();
+    auth.status = "authenticated";
     navigation.replace.mockReset();
     auth.refresh.mockReset();
     createStudySessionMock.mockReset();
     getActiveStudySessionMock.mockReset();
     submitRecallAnswerMock.mockReset();
+  });
+
+  it("shows backend recovery when authentication cannot be checked", async () => {
+    auth.status = "unavailable";
+
+    render(<StudySession />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("backend is unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(auth.refresh).toHaveBeenCalledTimes(1));
+    expect(getActiveStudySessionMock).not.toHaveBeenCalled();
   });
 
   it("keeps definitions hidden until reveal and advances only after acceptance", async () => {
@@ -174,6 +187,23 @@ describe("study session experience", () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
+  it("refreshes expired authentication without discarding the pending answer", async () => {
+    getActiveStudySessionMock.mockResolvedValue(activeSession);
+    submitRecallAnswerMock.mockRejectedValue(
+      new StudyApiError("unauthenticated", "Your sign-in expired."),
+    );
+
+    render(<StudySession />);
+
+    await screen.findByRole("heading", { name: "abate" });
+    fireEvent.click(screen.getByRole("button", { name: "Reveal meaning" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remembered" }));
+
+    await waitFor(() => expect(auth.refresh).toHaveBeenCalledTimes(1));
+    expect(window.sessionStorage.length).toBe(1);
+    expect(submitRecallAnswerMock).toHaveBeenCalledTimes(1);
+  });
+
   it("replays a stored pending answer before restoring session progress", async () => {
     const pending = savePendingAnswer(7, {
       client_request_id: "00000000-0000-4000-8000-000000000019",
@@ -191,6 +221,31 @@ describe("study session experience", () => {
       }),
     );
     expect(getActiveStudySessionMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: "lucid" })).toBeInTheDocument();
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("offers only exact retry after a saved answer fails to restore", async () => {
+    const pending = savePendingAnswer(7, {
+      client_request_id: "00000000-0000-4000-8000-000000000020",
+      itemId: firstItem.id,
+      rating: "forgot",
+      sessionId: activeSession.id,
+    });
+    submitRecallAnswerMock
+      .mockRejectedValueOnce(
+        new StudyApiError("unavailable", "The database paused.", { retryable: true }),
+      )
+      .mockResolvedValueOnce(response(nextSession));
+
+    render(<StudySession />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("database paused");
+    expect(screen.queryByRole("button", { name: "Start session" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry saved answer" }));
+
+    await waitFor(() => expect(submitRecallAnswerMock).toHaveBeenCalledTimes(2));
+    expect(submitRecallAnswerMock.mock.calls[1][0]).toEqual(pending);
     expect(await screen.findByRole("heading", { name: "lucid" })).toBeInTheDocument();
     expect(window.sessionStorage.length).toBe(0);
   });

@@ -160,10 +160,16 @@ function createStudyErrorFromResponse(response: Response, payload: unknown): Stu
   if (response.status === 400) {
     return new StudyApiError("validation", detail);
   }
+  if (response.status === 401) {
+    return new StudyApiError("unauthenticated", "Your sign-in expired. Sign in again to continue.");
+  }
   if (response.status === 403) {
-    return new StudyApiError("csrf", "Your study request expired. Please try again.", {
-      retryable: true,
-    });
+    if (detail.startsWith("CSRF Failed:")) {
+      return new StudyApiError("csrf", "Your study request expired. Please try again.", {
+        retryable: true,
+      });
+    }
+    return new StudyApiError("unauthenticated", "Your sign-in expired. Sign in again to continue.");
   }
   if (response.status === 404) {
     return new StudyApiError("not-found", detail, { code: error.code });

@@ -46,6 +46,17 @@ export function StudySession() {
   const [notice, setNotice] = useState<StudyNotice | null>(null);
   const termHeading = useRef<HTMLHeadingElement>(null);
 
+  const refreshExpiredAuthentication = useCallback(
+    async (error: unknown) => {
+      if (!(error instanceof StudyApiError) || error.kind !== "unauthenticated") {
+        return false;
+      }
+      await auth.refresh();
+      return true;
+    },
+    [auth.refresh],
+  );
+
   const restoreStudyProgress = useCallback(
     async (signal?: AbortSignal) => {
       if (!auth.account) {
@@ -72,6 +83,9 @@ export function StudySession() {
           if (signal?.aborted) {
             return;
           }
+          if (await refreshExpiredAuthentication(error)) {
+            return;
+          }
           if (
             !(error instanceof StudyApiError) ||
             !["conflict", "not-found"].includes(error.kind)
@@ -92,7 +106,7 @@ export function StudySession() {
           setRevealed(false);
         }
       } catch (error) {
-        if (!signal?.aborted) {
+        if (!signal?.aborted && !(await refreshExpiredAuthentication(error))) {
           setNotice(studyNoticeFromError(error));
         }
       } finally {
@@ -101,7 +115,7 @@ export function StudySession() {
         }
       }
     },
-    [auth.account],
+    [auth.account, refreshExpiredAuthentication],
   );
 
   useEffect(() => {
@@ -155,6 +169,9 @@ export function StudySession() {
       setSession(recorded.session);
       setRevealed(false);
     } catch (error) {
+      if (await refreshExpiredAuthentication(error)) {
+        return;
+      }
       if (error instanceof StudyApiError && ["conflict", "not-found"].includes(error.kind)) {
         clearPendingAnswer();
         setPending(null);
@@ -189,14 +206,6 @@ export function StudySession() {
     void submitPendingRecallAnswer(operation);
   }
 
-  if (auth.status === "checking" || loading) {
-    return (
-      <p aria-live="polite" className="text-foreground/70" role="status">
-        Restoring your study session…
-      </p>
-    );
-  }
-
   if (auth.status === "unavailable") {
     return (
       <div className="space-y-5">
@@ -210,11 +219,37 @@ export function StudySession() {
     );
   }
 
+  if (auth.status === "checking" || loading) {
+    return (
+      <p aria-live="polite" className="text-foreground/70" role="status">
+        Restoring your study session…
+      </p>
+    );
+  }
+
   if (auth.status !== "authenticated" || !auth.account) {
     return (
       <p className="text-foreground/70" role="status">
         Sign in is required to study.
       </p>
+    );
+  }
+
+  if (!session && pending) {
+    return (
+      <div className="space-y-5">
+        <p className="text-foreground/70" role="alert">
+          {notice?.message ?? "Your saved answer still needs to be restored."}
+        </p>
+        <Button
+          isDisabled={submitting}
+          isPending={submitting}
+          onPress={() => void submitPendingRecallAnswer(pending)}
+          variant="primary"
+        >
+          Retry saved answer
+        </Button>
+      </div>
     );
   }
 

@@ -159,6 +159,28 @@ describe("study API client", () => {
     } satisfies Partial<StudyApiError>);
   });
 
+  it("distinguishes an expired login from a rejected CSRF token", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const expiredLoginFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        jsonResponse({ detail: "Authentication credentials were not provided." }, 403),
+      );
+    const rejectedCsrfFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "stale-token" }, 200))
+      .mockResolvedValueOnce(jsonResponse({ detail: "CSRF Failed: CSRF token missing." }, 403));
+
+    await expect(getActiveStudySession({ fetcher: expiredLoginFetcher })).rejects.toMatchObject({
+      kind: "unauthenticated",
+      retryable: false,
+    } satisfies Partial<StudyApiError>);
+    await expect(createStudySession(1, { fetcher: rejectedCsrfFetcher })).rejects.toMatchObject({
+      kind: "csrf",
+      retryable: true,
+    } satisfies Partial<StudyApiError>);
+  });
+
   it("keeps only a valid versioned pending answer for the current learner", () => {
     const input = {
       client_request_id: "00000000-0000-4000-8000-000000000004",
