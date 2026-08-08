@@ -57,12 +57,9 @@ export function StudyCard({
         />
       </div>
 
-      <article className="min-h-80 rounded-[2rem] border border-black/10 bg-background/70 p-7 text-center shadow-xl shadow-black/5 dark:border-white/10 sm:p-12">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent">
-          Recall the meaning
-        </p>
+      <article className="min-h-80 rounded-[2rem] border border-black/10 bg-background/70 p-7 text-center dark:border-white/10 sm:p-12">
         <h2
-          className="mt-6 text-5xl font-black tracking-[-0.05em] outline-none sm:text-7xl"
+          className="text-5xl font-black tracking-[-0.05em] outline-none sm:text-7xl"
           ref={termHeading}
           tabIndex={-1}
         >
@@ -73,23 +70,25 @@ export function StudyCard({
         ) : null}
 
         {revealed ? (
-          <div className="mx-auto mt-10 max-w-2xl space-y-5 border-t border-black/10 pt-8 text-left dark:border-white/10">
+          <div className="mx-auto mt-10 max-w-2xl space-y-8 border-t border-black/10 pt-8 text-left dark:border-white/10">
             {item.senses.map((sense) => (
-              <div className="space-y-2" key={`${sense.position}-${sense.definition}`}>
-                <p className="font-semibold leading-7">
-                  <span className="mr-2 text-sm italic text-foreground/50">
+              <div className="space-y-3" key={`${sense.position}-${sense.definition}`}>
+                <p className="text-xl font-semibold leading-8 sm:text-2xl sm:leading-9">
+                  <span className="mr-3 text-sm italic text-foreground/55">
                     {sense.part_of_speech}
                   </span>
                   {sense.definition}
                 </p>
                 {sense.example ? (
-                  <p className="text-sm italic leading-6 text-foreground/55">“{sense.example}”</p>
+                  <p className="text-base italic leading-7 text-foreground/70 sm:text-lg sm:leading-8">
+                    “{sense.example}”
+                  </p>
                 ) : null}
               </div>
             ))}
           </div>
         ) : (
-          <p className="mx-auto mt-10 max-w-md text-foreground/55">
+          <p className="mx-auto mt-10 max-w-md text-base leading-7 text-foreground/60">
             Say the meaning to yourself before revealing the answer.
           </p>
         )}
