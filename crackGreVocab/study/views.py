@@ -15,7 +15,7 @@ from rest_framework.status import (
 )
 from rest_framework.views import APIView
 
-from .selectors import get_active_session
+from .selectors import get_active_study_session
 from .serializers import (
     CreateStudySessionSerializer,
     RecordRecallAnswerSerializer,
@@ -35,17 +35,22 @@ from .services import (
 
 
 class StudyApiView(APIView):
+    """Base class for authenticated, JSON-only, non-cacheable Study APIs."""
+
     parser_classes = (JSONParser,)
     renderer_classes = (JSONRenderer,)
     permission_classes = (IsAuthenticated,)
 
     def finalize_response(self, request, response, *args, **kwargs):
+        """Attach no-store caching to every Study API response."""
         finalized = super().finalize_response(request, response, *args, **kwargs)
         finalized["Cache-Control"] = "no-store"
         return finalized
 
 
 class StudySessionCollectionView(StudyApiView):
+    """Create a new Study Session or resume the learner's active session."""
+
     http_method_names = ["post", "options"]
 
     @extend_schema(
@@ -62,6 +67,7 @@ class StudySessionCollectionView(StudyApiView):
         },
     )
     def post(self, request) -> Response:
+        """Plan a bounded Study Session for the authenticated learner."""
         serializer = CreateStudySessionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
@@ -84,6 +90,8 @@ class StudySessionCollectionView(StudyApiView):
 
 
 class ActiveStudySessionView(StudyApiView):
+    """Expose the authenticated learner's resumable Study Session."""
+
     http_method_names = ["get", "head", "options"]
 
     @extend_schema(
@@ -95,7 +103,8 @@ class ActiveStudySessionView(StudyApiView):
         },
     )
     def get(self, request) -> Response:
-        session = get_active_session(learner=request.user)
+        """Return the active Study Session or a not-found response."""
+        session = get_active_study_session(learner=request.user)
         if session is None:
             return Response(
                 {"detail": "No active Study Session exists."},
@@ -105,6 +114,8 @@ class ActiveStudySessionView(StudyApiView):
 
 
 class StudySessionAnswerView(StudyApiView):
+    """Accept one idempotent self-grade for the current study item."""
+
     http_method_names = ["post", "options"]
 
     @extend_schema(
@@ -122,6 +133,7 @@ class StudySessionAnswerView(StudyApiView):
         },
     )
     def post(self, request, session_id, item_id) -> Response:
+        """Persist a recall answer and return authoritative study progress."""
         serializer = RecordRecallAnswerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:

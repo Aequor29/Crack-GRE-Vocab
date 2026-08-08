@@ -65,10 +65,10 @@ export type StudyRequestOptions = {
   signal?: AbortSignal;
 };
 
-function apiUrl(path: string): string {
+function buildStudyApiUrl(path: string): string {
   const origin = configuredApiOrigin();
   if (!origin) {
-    throw unavailableError("The local API is not configured.");
+    throw createStudyUnavailableError("The local API is not configured.");
   }
   return `${origin}${path}`;
 }
@@ -77,7 +77,7 @@ function isAbortError(error: unknown, signal?: AbortSignal): boolean {
   return signal?.aborted === true || (error instanceof DOMException && error.name === "AbortError");
 }
 
-function unavailableError(message = "The local backend is unavailable."): StudyApiError {
+function createStudyUnavailableError(message = "The local backend is unavailable."): StudyApiError {
   return new StudyApiError(
     "unavailable",
     `${message} Try again when Django and PostgreSQL are ready.`,
@@ -87,22 +87,22 @@ function unavailableError(message = "The local backend is unavailable."): StudyA
   );
 }
 
-async function request(
+async function requestStudyApi(
   path: string,
   init: RequestInit,
   { fetcher = fetch, signal }: StudyRequestOptions,
 ): Promise<Response> {
   try {
-    return await fetcher(apiUrl(path), { ...init, signal });
+    return await fetcher(buildStudyApiUrl(path), { ...init, signal });
   } catch (error) {
     if (isAbortError(error, signal) || error instanceof StudyApiError) {
       throw error;
     }
-    throw unavailableError();
+    throw createStudyUnavailableError();
   }
 }
 
-async function readJson(response: Response): Promise<unknown> {
+async function readResponseJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
   } catch {
@@ -148,12 +148,12 @@ function isStudyAnswerResponse(value: unknown): value is StudyAnswerResponse {
   );
 }
 
-function readErrorPayload(payload: unknown): Partial<StudyPlanningError> {
+function parseStudyErrorPayload(payload: unknown): Partial<StudyPlanningError> {
   return payload && typeof payload === "object" ? (payload as Partial<StudyPlanningError>) : {};
 }
 
-function errorFromResponse(response: Response, payload: unknown): StudyApiError {
-  const error = readErrorPayload(payload);
+function createStudyErrorFromResponse(response: Response, payload: unknown): StudyApiError {
+  const error = parseStudyErrorPayload(payload);
   const detail = isString(error.detail)
     ? error.detail
     : "The study request could not be completed.";
@@ -175,13 +175,13 @@ function errorFromResponse(response: Response, payload: unknown): StudyApiError 
     });
   }
   if (response.status === 503) {
-    return unavailableError(detail);
+    return createStudyUnavailableError(detail);
   }
-  return unavailableError();
+  return createStudyUnavailableError();
 }
 
-async function csrfToken(options: StudyRequestOptions): Promise<string> {
-  const response = await request(
+async function fetchFreshCsrfToken(options: StudyRequestOptions): Promise<string> {
+  const response = await requestStudyApi(
     CSRF_PATH,
     {
       cache: "no-store",
@@ -191,13 +191,13 @@ async function csrfToken(options: StudyRequestOptions): Promise<string> {
     },
     options,
   );
-  const payload = await readJson(response);
+  const payload = await readResponseJson(response);
   const token =
     payload && typeof payload === "object"
       ? (payload as { csrf_token?: unknown }).csrf_token
       : null;
   if (response.status !== 200 || !isString(token)) {
-    throw unavailableError("A fresh form token could not be obtained.");
+    throw createStudyUnavailableError("A fresh form token could not be obtained.");
   }
   return token;
 }
@@ -205,7 +205,7 @@ async function csrfToken(options: StudyRequestOptions): Promise<string> {
 export async function getActiveStudySession(
   options: StudyRequestOptions = {},
 ): Promise<StudySession | null> {
-  const response = await request(
+  const response = await requestStudyApi(
     STUDY_CONTRACT.active,
     {
       cache: "no-store",
@@ -215,22 +215,22 @@ export async function getActiveStudySession(
     },
     options,
   );
-  const payload = await readJson(response);
+  const payload = await readResponseJson(response);
   if (response.status === 200 && isStudySession(payload)) {
     return payload;
   }
   if (response.status === 404) {
     return null;
   }
-  throw errorFromResponse(response, payload);
+  throw createStudyErrorFromResponse(response, payload);
 }
 
 export async function createStudySession(
   newWordTarget: number,
   options: StudyRequestOptions = {},
 ): Promise<StudySession> {
-  const token = await csrfToken(options);
-  const response = await request(
+  const token = await fetchFreshCsrfToken(options);
+  const response = await requestStudyApi(
     STUDY_CONTRACT.sessions,
     {
       body: JSON.stringify({ new_word_target: newWordTarget }),
@@ -245,22 +245,22 @@ export async function createStudySession(
     },
     options,
   );
-  const payload = await readJson(response);
+  const payload = await readResponseJson(response);
   if ((response.status === 200 || response.status === 201) && isStudySession(payload)) {
     return payload;
   }
-  throw errorFromResponse(response, payload);
+  throw createStudyErrorFromResponse(response, payload);
 }
 
 export async function submitRecallAnswer(
   input: RecallAnswerInput,
   options: StudyRequestOptions = {},
 ): Promise<StudyAnswerResponse> {
-  const token = await csrfToken(options);
+  const token = await fetchFreshCsrfToken(options);
   const path = STUDY_CONTRACT.answer
     .replace("{session_id}", input.sessionId)
     .replace("{item_id}", input.itemId);
-  const response = await request(
+  const response = await requestStudyApi(
     path,
     {
       body: JSON.stringify({
@@ -278,9 +278,9 @@ export async function submitRecallAnswer(
     },
     options,
   );
-  const payload = await readJson(response);
+  const payload = await readResponseJson(response);
   if ((response.status === 200 || response.status === 201) && isStudyAnswerResponse(payload)) {
     return payload;
   }
-  throw errorFromResponse(response, payload);
+  throw createStudyErrorFromResponse(response, payload);
 }
