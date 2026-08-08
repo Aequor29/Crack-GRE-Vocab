@@ -27,6 +27,10 @@ export function StudySessionPlanner({
           Due reviews come first. The backend then adds up to your chosen number of new words, with
           a hard limit of 30 cards per sitting.
         </p>
+        <p className="mt-4 max-w-2xl border-l-2 border-accent pl-4 text-sm leading-6 text-foreground/65">
+          Recall each word first, reveal its meaning, then grade yourself honestly as Remembered or
+          Forgot.
+        </p>
       </div>
 
       {notice ? (

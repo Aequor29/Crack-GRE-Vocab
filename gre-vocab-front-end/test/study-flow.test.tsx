@@ -204,6 +204,7 @@ describe("study session experience", () => {
     expect(
       await screen.findByRole("heading", { name: "Start a focused session" }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Recall each word first/)).toBeInTheDocument();
     expect(screen.getByRole("slider", { name: /new-word target/i })).toHaveValue("10");
     fireEvent.click(screen.getByRole("button", { name: "Start session" }));
 
