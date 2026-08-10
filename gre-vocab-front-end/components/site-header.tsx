@@ -4,6 +4,7 @@ import { AuthNavigation } from "@/components/auth/auth-navigation";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 
 const navigation = [
+  { href: "/study", label: "Study" },
   { href: "/#status", label: "Rebuild status" },
   { href: "/#principles", label: "Principles" },
 ] as const;
@@ -31,7 +32,7 @@ export function SiteHeader() {
           <nav aria-label="Primary" className="flex items-center gap-1">
             {navigation.map((item, index) => (
               <Link
-                className={`rounded-full px-3 py-2 text-sm font-medium text-foreground/70 transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${index === 1 ? "hidden sm:inline-flex" : "inline-flex"}`}
+                className={`rounded-full px-3 py-2 text-sm font-medium text-foreground/70 transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${index > 0 ? "hidden md:inline-flex" : "inline-flex"}`}
                 href={item.href}
                 key={item.href}
               >

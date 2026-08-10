@@ -22,6 +22,7 @@ from .selectors import DueItem
 
 
 def lock_learner(*, learner_id: int) -> LearnerAccount:
+    """Lock and return the learner that owns the surrounding transaction."""
     return LearnerAccount.objects.select_for_update().get(pk=learner_id)
 
 
@@ -30,6 +31,7 @@ def lock_session(
     learner: LearnerAccount,
     session_id: UUID,
 ) -> StudySession | None:
+    """Lock and return a learner-owned Study Session, if it exists."""
     return (
         StudySession.objects.select_for_update()
         .filter(pk=session_id, learner=learner)
@@ -42,6 +44,7 @@ def lock_session_item(
     session: StudySession,
     item_id: UUID,
 ) -> StudySessionItem | None:
+    """Lock and return a session-owned study item, if it exists."""
     return (
         StudySessionItem.objects.select_for_update()
         .select_related("corpus_entry__word")
@@ -54,6 +57,7 @@ def lock_current_session_item(
     *,
     session: StudySession,
 ) -> StudySessionItem | None:
+    """Lock and return the next unanswered item in the planned order."""
     answered_item_ids = RecallAnswer.objects.values("item_id")
     return (
         StudySessionItem.objects.select_for_update()
@@ -70,6 +74,7 @@ def lock_word_state(
     learner: LearnerAccount,
     item: StudySessionItem,
 ) -> LearnerWordState | None:
+    """Lock and return the learner's scheduling state for an item."""
     return (
         LearnerWordState.objects.select_for_update()
         .filter(learner=learner, word_id=item.corpus_entry.word_id)
@@ -123,7 +128,7 @@ def _session_items(
     return items
 
 
-def create_session_plan(
+def persist_study_session_plan(
     *,
     learner: LearnerAccount,
     corpus: CorpusVersion,
@@ -152,7 +157,7 @@ def create_session_plan(
     return session
 
 
-def create_recall_records(
+def persist_recall_answer_transition(
     *,
     learner: LearnerAccount,
     item: StudySessionItem,
@@ -218,6 +223,11 @@ def create_recall_records(
     return answer, outcome, state
 
 
-def complete_session(*, session: StudySession, ended_at: datetime) -> None:
+def mark_study_session_completed(
+    *,
+    session: StudySession,
+    ended_at: datetime,
+) -> None:
+    """Mark a Study Session completed at the accepted answer time."""
     session.close("completed", at=ended_at)
     session.save(update_fields=("status", "ended_at", "updated_at"))
