@@ -152,6 +152,16 @@ export function AccountForm({ mode }: AccountFormProps) {
           type="password"
         />
         <FieldError id={`${mode}-password-error`} messages={fieldErrors.password} />
+        {!signingUp ? (
+          <p className="mt-3 text-right text-sm">
+            <Link
+              className="font-bold text-accent underline-offset-4 hover:underline"
+              href="/forgot-password"
+            >
+              Forgot password?
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       {formError ? (

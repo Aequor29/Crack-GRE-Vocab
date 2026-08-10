@@ -1,7 +1,10 @@
 import type {
+  ApiMessage,
   AuthValidationError,
   CsrfToken,
   LearnerAccount,
+  PasswordResetConfirmRequest,
+  PasswordResetStartRequest,
   SignInRequest,
   SignUpRequest,
 } from "@/lib/api/generated/schema.generated";
@@ -18,6 +21,8 @@ const AUTH_CONTRACT = {
   paths: {
     account: "/api/auth/account/",
     csrf: "/api/auth/csrf/",
+    passwordResetConfirm: "/api/auth/password-reset/confirm/",
+    passwordResetStart: "/api/auth/password-reset/",
     signIn: "/api/auth/sign-in/",
     signOut: "/api/auth/sign-out/",
     signUp: "/api/auth/sign-up/",
@@ -25,6 +30,8 @@ const AUTH_CONTRACT = {
   responseStatusesMatch: {
     account: true,
     csrf: true,
+    passwordResetConfirm: true,
+    passwordResetStart: true,
     signIn: true,
     signOut: true,
     signUp: true,
@@ -33,6 +40,8 @@ const AUTH_CONTRACT = {
   paths: {
     account: keyof OpenApiPaths;
     csrf: keyof OpenApiPaths;
+    passwordResetConfirm: keyof OpenApiPaths;
+    passwordResetStart: keyof OpenApiPaths;
     signIn: keyof OpenApiPaths;
     signOut: keyof OpenApiPaths;
     signUp: keyof OpenApiPaths;
@@ -40,6 +49,14 @@ const AUTH_CONTRACT = {
   responseStatusesMatch: {
     account: IsExact<keyof OpenApiPaths["/api/auth/account/"]["get"]["responses"], "200" | "403">;
     csrf: IsExact<keyof OpenApiPaths["/api/auth/csrf/"]["get"]["responses"], "200">;
+    passwordResetConfirm: IsExact<
+      keyof OpenApiPaths["/api/auth/password-reset/confirm/"]["post"]["responses"],
+      "200" | "400" | "403" | "415"
+    >;
+    passwordResetStart: IsExact<
+      keyof OpenApiPaths["/api/auth/password-reset/"]["post"]["responses"],
+      "202" | "400" | "403" | "415"
+    >;
     signIn: IsExact<
       keyof OpenApiPaths["/api/auth/sign-in/"]["post"]["responses"],
       "200" | "400" | "401" | "403" | "415"
@@ -55,10 +72,13 @@ const AUTH_CONTRACT = {
 export type Account = LearnerAccount;
 export type SignInInput = SignInRequest;
 export type SignUpInput = SignUpRequest;
+export type PasswordResetConfirmInput = PasswordResetConfirmRequest;
+export type PasswordResetStartInput = PasswordResetStartRequest;
 export type AuthFieldErrors = AuthValidationError;
 export type AuthErrorKind =
   | "credentials"
   | "csrf"
+  | "recovery"
   | "unauthenticated"
   | "unavailable"
   | "validation";
@@ -118,13 +138,28 @@ function readFieldErrors(value: unknown): AuthFieldErrors {
 
   const source = value as Record<string, unknown>;
   const result: AuthFieldErrors = {};
-  for (const field of ["email", "display_name", "password", "non_field_errors"] as const) {
+  for (const field of [
+    "email",
+    "display_name",
+    "password",
+    "token",
+    "uid",
+    "non_field_errors",
+  ] as const) {
     const messages = source[field];
     if (Array.isArray(messages) && messages.every((message) => typeof message === "string")) {
       result[field] = messages;
     }
   }
   return result;
+}
+
+function isApiMessage(value: unknown): value is ApiMessage {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    typeof (value as Partial<ApiMessage>).detail === "string"
+  );
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -173,12 +208,11 @@ async function csrfToken({ fetcher = fetch, signal }: AuthRequestOptions): Promi
   return payload.csrf_token;
 }
 
-async function mutateAccount(
-  path: typeof AUTH_CONTRACT.paths.signIn | typeof AUTH_CONTRACT.paths.signUp,
-  input: SignInInput | SignUpInput,
-  expectedStatus: 200 | 201,
+async function postJsonWithCsrf(
+  path: keyof OpenApiPaths,
+  input: unknown,
   { fetcher = fetch, signal }: AuthRequestOptions,
-): Promise<Account> {
+): Promise<{ payload: unknown; response: Response }> {
   const token = await csrfToken({ fetcher, signal });
   let response: Response;
   try {
@@ -204,7 +238,16 @@ async function mutateAccount(
     throw unavailableError();
   }
 
-  const payload = await readJson(response);
+  return { payload: await readJson(response), response };
+}
+
+async function mutateAccount(
+  path: typeof AUTH_CONTRACT.paths.signIn | typeof AUTH_CONTRACT.paths.signUp,
+  input: SignInInput | SignUpInput,
+  expectedStatus: 200 | 201,
+  { fetcher = fetch, signal }: AuthRequestOptions,
+): Promise<Account> {
+  const { payload, response } = await postJsonWithCsrf(path, input, { fetcher, signal });
   if (response.status === expectedStatus && isAccount(payload)) {
     return payload;
   }
@@ -223,6 +266,37 @@ async function mutateAccount(
   }
   if (response.status === 415) {
     throw new AuthApiError("unavailable", "The account request format was rejected.");
+  }
+  throw unavailableError();
+}
+
+async function submitPasswordRecoveryRequest(
+  path:
+    | typeof AUTH_CONTRACT.paths.passwordResetStart
+    | typeof AUTH_CONTRACT.paths.passwordResetConfirm,
+  input: PasswordResetStartInput | PasswordResetConfirmInput,
+  expectedStatus: 200 | 202,
+  { fetcher = fetch, signal }: AuthRequestOptions,
+): Promise<string> {
+  const { payload, response } = await postJsonWithCsrf(path, input, { fetcher, signal });
+  if (response.status === expectedStatus && isApiMessage(payload)) {
+    return payload.detail;
+  }
+  if (response.status === 400) {
+    if (isApiMessage(payload)) {
+      throw new AuthApiError("recovery", payload.detail);
+    }
+    throw new AuthApiError(
+      "validation",
+      "Check the highlighted fields and try again.",
+      readFieldErrors(payload),
+    );
+  }
+  if (response.status === 403) {
+    throw new AuthApiError("csrf", "Your form expired. Please try again.");
+  }
+  if (response.status === 415) {
+    throw new AuthApiError("unavailable", "The recovery request format was rejected.");
   }
   throw unavailableError();
 }
@@ -266,6 +340,25 @@ export function signUp(input: SignUpInput, options: AuthRequestOptions = {}): Pr
 
 export function signIn(input: SignInInput, options: AuthRequestOptions = {}): Promise<Account> {
   return mutateAccount(AUTH_CONTRACT.paths.signIn, input, 200, options);
+}
+
+export function requestPasswordReset(
+  input: PasswordResetStartInput,
+  options: AuthRequestOptions = {},
+): Promise<string> {
+  return submitPasswordRecoveryRequest(AUTH_CONTRACT.paths.passwordResetStart, input, 202, options);
+}
+
+export function confirmPasswordReset(
+  input: PasswordResetConfirmInput,
+  options: AuthRequestOptions = {},
+): Promise<string> {
+  return submitPasswordRecoveryRequest(
+    AUTH_CONTRACT.paths.passwordResetConfirm,
+    input,
+    200,
+    options,
+  );
 }
 
 export async function signOut({ fetcher = fetch, signal }: AuthRequestOptions = {}): Promise<void> {

@@ -29,6 +29,11 @@ Start Django as described in the repository README, then open
 and the protected `/account`; retired prototype routes return the standard
 not-found state.
 
+Password recovery is available at `/forgot-password`; emailed links open
+`/reset-password/confirm` with opaque identity and token parameters. Completing
+a reset invalidates every existing server session and returns the learner to
+`/sign-in` rather than silently authenticating the reset browser.
+
 `NEXT_PUBLIC_API_BASE_URL` is a public, local-only origin such as
 `http://localhost:8000`. The browser calls Django directly through its exact
 local-origin CORS policy. The page reports ready, database unavailable, or

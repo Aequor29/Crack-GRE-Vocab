@@ -12,10 +12,36 @@ _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
 def required_env(name: str) -> str:
     """Return a non-empty environment variable or fail startup."""
-    value = os.environ.get(name, "").strip()
+    return env_string(name)
+
+
+def env_string(name: str, *, default: str | None = None) -> str:
+    """Return a non-empty string setting, optionally using an explicit default."""
+    raw_value = os.environ.get(name)
+    value = default if raw_value is None else raw_value.strip()
     if not value:
         raise ImproperlyConfigured(f"Required environment variable {name} is missing.")
     return value
+
+
+def http_url(name: str, *, default: str | None = None) -> str:
+    """Return an absolute HTTP URL without credentials, query, or fragment."""
+    value = env_string(name, default=default)
+    try:
+        parsed = urlparse(value)
+        parsed.port
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} must be a valid HTTP URL.") from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ImproperlyConfigured(f"{name} must be a valid HTTP URL.")
+    return value.rstrip("/")
 
 
 def postgres_database_url(name: str = "DATABASE_URL") -> str:

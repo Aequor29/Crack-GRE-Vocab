@@ -75,14 +75,31 @@ class SignInSerializer(serializers.Serializer):
         return normalize_email_identity(value)
 
 
+class PasswordResetStartSerializer(serializers.Serializer):
+    """Validate a non-enumerating password-recovery request."""
+
+    email = serializers.EmailField(max_length=EMAIL_MAX_LENGTH)
+
+    def validate_email(self, value: str) -> str:
+        return normalize_email_identity(value)
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Validate the opaque identity, token, and replacement password shape."""
+
+    uid = serializers.CharField(max_length=128, trim_whitespace=False)
+    token = serializers.CharField(max_length=256, trim_whitespace=False)
+    password = serializers.CharField(trim_whitespace=False, write_only=True)
+
+
 class CsrfTokenSerializer(serializers.Serializer):
     """Return a masked CSRF token for one unsafe request."""
 
     csrf_token = serializers.CharField()
 
 
-class ApiErrorSerializer(serializers.Serializer):
-    """Describe a non-field API error."""
+class ApiMessageSerializer(serializers.Serializer):
+    """Describe an API response carrying one human-readable message."""
 
     detail = serializers.CharField()
 
@@ -94,6 +111,8 @@ class AuthValidationErrorSerializer(serializers.Serializer):
     email = serializers.ListField(child=serializers.CharField(), required=False)
     display_name = serializers.ListField(child=serializers.CharField(), required=False)
     password = serializers.ListField(child=serializers.CharField(), required=False)
+    token = serializers.ListField(child=serializers.CharField(), required=False)
+    uid = serializers.ListField(child=serializers.CharField(), required=False)
     non_field_errors = serializers.ListField(
         child=serializers.CharField(),
         required=False,

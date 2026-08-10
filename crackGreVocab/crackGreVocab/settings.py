@@ -6,7 +6,14 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
-from .config import env_bool, env_list, postgres_database_url, required_env
+from .config import (
+    env_bool,
+    env_list,
+    env_string,
+    http_url,
+    postgres_database_url,
+    required_env,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env", override=False)
@@ -134,6 +141,24 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
     default=CORS_ALLOWED_ORIGINS if DEBUG else (),
+)
+
+PASSWORD_RESET_TIMEOUT = 30 * 60
+PASSWORD_RESET_FRONTEND_URL = http_url(
+    "PASSWORD_RESET_FRONTEND_URL",
+    default=(
+        "http://localhost:3000/reset-password/confirm" if DEBUG else None
+    ),
+)
+EMAIL_BACKEND = env_string(
+    "EMAIL_BACKEND",
+    default=(
+        "django.core.mail.backends.console.EmailBackend" if DEBUG else None
+    ),
+)
+DEFAULT_FROM_EMAIL = env_string(
+    "DEFAULT_FROM_EMAIL",
+    default=("Crack GRE Vocab <no-reply@localhost>" if DEBUG else None),
 )
 
 LANGUAGE_CODE = "en-us"

@@ -41,8 +41,8 @@ export type KindEnum = "due" | "new";
  */
 export type DatabaseEnum = "available" | "unavailable";
 
-/** Describe a non-field API error. */
-export interface ApiError {
+/** Describe an API response carrying one human-readable message. */
+export interface ApiMessage {
   detail: string;
 }
 
@@ -52,6 +52,8 @@ export interface AuthValidationError {
   email?: string[];
   display_name?: string[];
   password?: string[];
+  token?: string[];
+  uid?: string[];
   non_field_errors?: string[];
 }
 
@@ -77,6 +79,32 @@ export interface LearnerAccount {
    */
   email: string;
   display_name: string;
+}
+
+/** Validate the opaque identity, token, and replacement password shape. */
+export interface PasswordResetConfirmRequest {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  uid: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  token: string;
+  /** @minLength 1 */
+  password: string;
+}
+
+/** Validate a non-enumerating password-recovery request. */
+export interface PasswordResetStartRequest {
+  /**
+   * @format email
+   * @minLength 1
+   * @maxLength 254
+   */
+  email: string;
 }
 
 /** Describe the stable ready or database-unavailable response shape. */
@@ -233,7 +261,9 @@ export interface StudySession {
   created_at: string;
   /** @format date-time */
   ended_at?: string | null;
+  /** Return how many planned items have accepted answers. */
   answered_count: number;
+  /** Return how many planned items still need an accepted answer. */
   remaining_count: number;
   current_item: StudySessionItem | null;
   items: StudySessionItem[];
