@@ -24,6 +24,11 @@ def env_string(name: str, *, default: str | None = None) -> str:
     return value
 
 
+def optional_env_string(name: str) -> str:
+    """Return a trimmed optional string setting, using empty for disabled values."""
+    return os.environ.get(name, "").strip()
+
+
 def http_url(name: str, *, default: str | None = None) -> str:
     """Return an absolute HTTP URL without credentials, query, or fragment."""
     value = env_string(name, default=default)

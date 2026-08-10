@@ -13,7 +13,10 @@ import {
 
 import {
   type Account,
+  type GoogleLinkConfirmInput,
   getCurrentAccount,
+  cancelGoogleLink as requestCancelGoogleLink,
+  confirmGoogleLink as requestConfirmGoogleLink,
   signIn as requestSignIn,
   signOut as requestSignOut,
   signUp as requestSignUp,
@@ -25,6 +28,8 @@ export type AuthStatus = "authenticated" | "checking" | "unauthenticated" | "una
 
 type AuthContextValue = {
   account: Account | null;
+  cancelGoogleLink: () => Promise<void>;
+  confirmGoogleLink: (input: GoogleLinkConfirmInput) => Promise<Account>;
   refresh: () => Promise<void>;
   signIn: (input: SignInInput) => Promise<Account>;
   signOut: () => Promise<void>;
@@ -86,9 +91,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("unauthenticated");
   }, []);
 
+  const confirmGoogleLink = useCallback(async (input: GoogleLinkConfirmInput) => {
+    const authenticatedAccount = await requestConfirmGoogleLink(input);
+    setAccount(authenticatedAccount);
+    setStatus("authenticated");
+    return authenticatedAccount;
+  }, []);
+
+  const cancelGoogleLink = useCallback(async () => {
+    await requestCancelGoogleLink();
+  }, []);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ account, refresh, signIn, signOut, signUp, status }),
-    [account, refresh, signIn, signOut, signUp, status],
+    () => ({
+      account,
+      cancelGoogleLink,
+      confirmGoogleLink,
+      refresh,
+      signIn,
+      signOut,
+      signUp,
+      status,
+    }),
+    [account, cancelGoogleLink, confirmGoogleLink, refresh, signIn, signOut, signUp, status],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

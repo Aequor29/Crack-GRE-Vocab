@@ -28,6 +28,11 @@ class AccountOpenApiTests(SimpleTestCase):
                 "post",
                 {"200", "400", "403", "415"},
             ),
+            "/api/auth/google/link/confirm/": (
+                "post",
+                {"200", "400", "401", "403", "409", "415"},
+            ),
+            "/api/auth/google/link/cancel/": ("post", {"204", "403"}),
             "/api/auth/sign-out/": ("post", {"204", "403"}),
             "/api/auth/account/": ("get", {"200", "403"}),
         }
@@ -40,6 +45,8 @@ class AccountOpenApiTests(SimpleTestCase):
             "/api/auth/sign-in/",
             "/api/auth/password-reset/",
             "/api/auth/password-reset/confirm/",
+            "/api/auth/google/link/confirm/",
+            "/api/auth/google/link/cancel/",
             "/api/auth/sign-out/",
         ):
             csrf_header = paths[path]["post"]["parameters"][0]

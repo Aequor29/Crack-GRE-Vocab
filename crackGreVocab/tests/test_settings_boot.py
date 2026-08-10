@@ -36,3 +36,46 @@ class SettingsBootTests(TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("ImproperlyConfigured", result.stderr)
         self.assertIn("DATABASE_URL must use PostgreSQL", result.stderr)
+
+    def test_google_credentials_must_be_configured_as_a_pair(self):
+        result = run_settings_script(
+            BOOT_SCRIPT,
+            overrides={"GOOGLE_OAUTH_CLIENT_ID": "client-id-only"},
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ImproperlyConfigured", result.stderr)
+        self.assertIn(
+            "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET",
+            result.stderr,
+        )
+
+    def test_enabled_google_oauth_requires_explicit_hosted_callback(self):
+        result = run_settings_script(
+            BOOT_SCRIPT,
+            overrides={
+                "GOOGLE_OAUTH_CLIENT_ID": "fresh-client-id",
+                "GOOGLE_OAUTH_CLIENT_SECRET": "fresh-client-secret",
+            },
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ImproperlyConfigured", result.stderr)
+        self.assertIn("GOOGLE_OAUTH_CALLBACK_URL", result.stderr)
+
+    def test_enabled_google_oauth_requires_https_when_hosted(self):
+        result = run_settings_script(
+            BOOT_SCRIPT,
+            overrides={
+                "GOOGLE_OAUTH_CALLBACK_URL": (
+                    "http://api.example.com/api/auth/google/callback/"
+                ),
+                "GOOGLE_OAUTH_CLIENT_ID": "fresh-client-id",
+                "GOOGLE_OAUTH_CLIENT_SECRET": "fresh-client-secret",
+                "GOOGLE_OAUTH_FRONTEND_ORIGIN": "http://app.example.com",
+            },
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ImproperlyConfigured", result.stderr)
+        self.assertIn("must use HTTPS", result.stderr)

@@ -2,6 +2,7 @@ import type {
   ApiMessage,
   AuthValidationError,
   CsrfToken,
+  GoogleLinkConfirmRequest,
   LearnerAccount,
   PasswordResetConfirmRequest,
   PasswordResetStartRequest,
@@ -23,6 +24,8 @@ const AUTH_CONTRACT = {
     csrf: "/api/auth/csrf/",
     passwordResetConfirm: "/api/auth/password-reset/confirm/",
     passwordResetStart: "/api/auth/password-reset/",
+    googleLinkCancel: "/api/auth/google/link/cancel/",
+    googleLinkConfirm: "/api/auth/google/link/confirm/",
     signIn: "/api/auth/sign-in/",
     signOut: "/api/auth/sign-out/",
     signUp: "/api/auth/sign-up/",
@@ -32,6 +35,8 @@ const AUTH_CONTRACT = {
     csrf: true,
     passwordResetConfirm: true,
     passwordResetStart: true,
+    googleLinkCancel: true,
+    googleLinkConfirm: true,
     signIn: true,
     signOut: true,
     signUp: true,
@@ -42,6 +47,8 @@ const AUTH_CONTRACT = {
     csrf: keyof OpenApiPaths;
     passwordResetConfirm: keyof OpenApiPaths;
     passwordResetStart: keyof OpenApiPaths;
+    googleLinkCancel: keyof OpenApiPaths;
+    googleLinkConfirm: keyof OpenApiPaths;
     signIn: keyof OpenApiPaths;
     signOut: keyof OpenApiPaths;
     signUp: keyof OpenApiPaths;
@@ -57,6 +64,14 @@ const AUTH_CONTRACT = {
       keyof OpenApiPaths["/api/auth/password-reset/"]["post"]["responses"],
       "202" | "400" | "403" | "415"
     >;
+    googleLinkCancel: IsExact<
+      keyof OpenApiPaths["/api/auth/google/link/cancel/"]["post"]["responses"],
+      "204" | "403"
+    >;
+    googleLinkConfirm: IsExact<
+      keyof OpenApiPaths["/api/auth/google/link/confirm/"]["post"]["responses"],
+      "200" | "400" | "401" | "403" | "409" | "415"
+    >;
     signIn: IsExact<
       keyof OpenApiPaths["/api/auth/sign-in/"]["post"]["responses"],
       "200" | "400" | "401" | "403" | "415"
@@ -70,12 +85,14 @@ const AUTH_CONTRACT = {
 };
 
 export type Account = LearnerAccount;
+export type GoogleLinkConfirmInput = GoogleLinkConfirmRequest;
 export type SignInInput = SignInRequest;
 export type SignUpInput = SignUpRequest;
 export type PasswordResetConfirmInput = PasswordResetConfirmRequest;
 export type PasswordResetStartInput = PasswordResetStartRequest;
 export type AuthFieldErrors = AuthValidationError;
 export type AuthErrorKind =
+  | "conflict"
   | "credentials"
   | "csrf"
   | "recovery"
@@ -162,6 +179,14 @@ function isApiMessage(value: unknown): value is ApiMessage {
   );
 }
 
+function readApiMessage(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const detail = (value as { detail?: unknown }).detail;
+  return typeof detail === "string" ? detail : null;
+}
+
 async function readJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -210,19 +235,20 @@ async function csrfToken({ fetcher = fetch, signal }: AuthRequestOptions): Promi
 
 async function postJsonWithCsrf(
   path: keyof OpenApiPaths,
-  input: unknown,
+  input: unknown | undefined,
   { fetcher = fetch, signal }: AuthRequestOptions,
 ): Promise<{ payload: unknown; response: Response }> {
   const token = await csrfToken({ fetcher, signal });
+  const hasBody = input !== undefined;
   let response: Response;
   try {
     response = await fetcher(apiUrl(path), {
-      body: JSON.stringify(input),
+      ...(hasBody ? { body: JSON.stringify(input) } : {}),
       cache: "no-store",
       credentials: "include",
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
         "X-CSRFToken": token,
       },
       method: "POST",
@@ -238,7 +264,10 @@ async function postJsonWithCsrf(
     throw unavailableError();
   }
 
-  return { payload: await readJson(response), response };
+  return {
+    payload: response.status === 204 ? null : await readJson(response),
+    response,
+  };
 }
 
 async function mutateAccount(
@@ -361,30 +390,73 @@ export function confirmPasswordReset(
   );
 }
 
-export async function signOut({ fetcher = fetch, signal }: AuthRequestOptions = {}): Promise<void> {
-  const token = await csrfToken({ fetcher, signal });
-  let response: Response;
-  try {
-    response = await fetcher(apiUrl(AUTH_CONTRACT.paths.signOut), {
-      cache: "no-store",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "X-CSRFToken": token,
-      },
-      method: "POST",
-      signal,
-    });
-  } catch (error) {
-    if (isAbortError(error, signal)) {
-      throw error;
-    }
-    if (error instanceof AuthApiError) {
-      throw error;
-    }
-    throw unavailableError();
+export function googleSignInUrl(): string {
+  const origin = configuredApiOrigin();
+  if (!origin) {
+    return "#google-sign-in-unavailable";
+  }
+  return `${origin}/api/auth/google/start/`;
+}
+
+export async function confirmGoogleLink(
+  input: GoogleLinkConfirmInput,
+  options: AuthRequestOptions = {},
+): Promise<Account> {
+  const { payload, response } = await postJsonWithCsrf(
+    AUTH_CONTRACT.paths.googleLinkConfirm,
+    input,
+    options,
+  );
+  if (response.status === 200 && isAccount(payload)) {
+    return payload;
   }
 
+  const message = readApiMessage(payload);
+  if (response.status === 400) {
+    throw new AuthApiError(
+      "validation",
+      message ?? "Start Google sign-in again before linking.",
+      readFieldErrors(payload),
+    );
+  }
+  if (response.status === 401) {
+    throw new AuthApiError(
+      "credentials",
+      message ?? "Enter the current password for this account.",
+    );
+  }
+  if (response.status === 403) {
+    throw new AuthApiError("csrf", "Your form expired. Please try again.");
+  }
+  if (response.status === 409) {
+    throw new AuthApiError(
+      "conflict",
+      message ?? "This Google identity cannot be linked to that account.",
+    );
+  }
+  if (response.status === 415) {
+    throw new AuthApiError("unavailable", "The Google link request format was rejected.");
+  }
+  throw unavailableError();
+}
+
+export async function cancelGoogleLink(options: AuthRequestOptions = {}): Promise<void> {
+  const { response } = await postJsonWithCsrf(
+    AUTH_CONTRACT.paths.googleLinkCancel,
+    undefined,
+    options,
+  );
+  if (response.status === 204) {
+    return;
+  }
+  if (response.status === 403) {
+    throw new AuthApiError("csrf", "Your form expired. Please try again.");
+  }
+  throw unavailableError();
+}
+
+export async function signOut(options: AuthRequestOptions = {}): Promise<void> {
+  const { response } = await postJsonWithCsrf(AUTH_CONTRACT.paths.signOut, undefined, options);
   if (response.status === 204) {
     return;
   }

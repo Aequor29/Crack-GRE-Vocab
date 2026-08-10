@@ -5,9 +5,14 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import {
+  GoogleSignInControls,
+  type GoogleSignInStatus,
+} from "@/components/auth/google-sign-in-controls";
 import { AuthApiError, type AuthFieldErrors } from "@/lib/api/auth";
 
 type AccountFormProps = {
+  googleStatus?: GoogleSignInStatus;
   mode: "sign-in" | "sign-up";
 };
 
@@ -22,7 +27,7 @@ function FieldError({ id, messages }: { id: string; messages?: string[] }) {
   ) : null;
 }
 
-export function AccountForm({ mode }: AccountFormProps) {
+export function AccountForm({ googleStatus, mode }: AccountFormProps) {
   const router = useRouter();
   const auth = useAuth();
   const [fieldErrors, setFieldErrors] = useState<AuthFieldErrors>({});
@@ -47,6 +52,10 @@ export function AccountForm({ mode }: AccountFormProps) {
         </Link>
       </div>
     );
+  }
+
+  if (googleStatus === "link-required") {
+    return <GoogleSignInControls status={googleStatus} />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -88,6 +97,14 @@ export function AccountForm({ mode }: AccountFormProps) {
 
   return (
     <form className="space-y-5" noValidate onSubmit={handleSubmit}>
+      <GoogleSignInControls status={googleStatus} />
+
+      <div aria-hidden="true" className="flex items-center gap-4">
+        <span className="h-px flex-1 bg-foreground/15" />
+        <span className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/50">or</span>
+        <span className="h-px flex-1 bg-foreground/15" />
+      </div>
+
       {auth.status === "unavailable" ? (
         <p className="rounded-2xl bg-amber-500/10 p-4 text-sm text-foreground" role="status">
           The local backend was unavailable during session restoration. You can retry by submitting

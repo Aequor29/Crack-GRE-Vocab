@@ -26,8 +26,10 @@ npm run dev
 
 Start Django as described in the repository README, then open
 <http://localhost:3000>. The application routes are `/`, `/sign-up`, `/sign-in`,
-and the protected `/account`; retired prototype routes return the standard
-not-found state.
+the protected `/account`, and `/study`; retired prototype routes return the
+standard not-found state. Sign-in and sign-up offer Google OIDC when Django has
+fresh local provider credentials configured. A matching password account pauses
+at an explicit current-password confirmation before Google is linked.
 
 Password recovery is available at `/forgot-password`; emailed links open
 `/reset-password/confirm` with opaque identity and token parameters. Completing

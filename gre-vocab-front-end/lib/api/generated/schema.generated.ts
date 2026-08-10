@@ -70,6 +70,12 @@ export interface CsrfToken {
   csrf_token: string;
 }
 
+/** Validate password proof for an explicitly pending Google link. */
+export interface GoogleLinkConfirmRequest {
+  /** @minLength 1 */
+  password: string;
+}
+
 /** Return the public portion of the current learner account. */
 export interface LearnerAccount {
   id: number;

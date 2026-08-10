@@ -51,3 +51,24 @@ class LearnerAccount(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self) -> str:
         return self.email
+
+
+class GoogleIdentity(models.Model):
+    """Bind one stable Google subject to one clean-rebuild learner account."""
+
+    account = models.OneToOneField(
+        LearnerAccount,
+        on_delete=models.CASCADE,
+        related_name="google_identity",
+    )
+    subject = models.CharField(max_length=255, unique=True)
+    email_at_link = models.EmailField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Google identity"
+        verbose_name_plural = "Google identities"
+
+    def __str__(self) -> str:
+        """Return an administrator-facing identity label."""
+        return f"Google identity for {self.account.email}"
