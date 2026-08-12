@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getCurrentAccount, signIn, signOut, signUp } from "@/lib/api/auth";
+import {
+  confirmPasswordReset,
+  getCurrentAccount,
+  requestPasswordReset,
+  signIn,
+  signOut,
+  signUp,
+} from "@/lib/api/auth";
 
 const account = {
   display_name: "Ada Learner",
@@ -132,5 +139,78 @@ describe("account API client", () => {
         method: "POST",
       }),
     );
+  });
+
+  it("requests password recovery with fresh CSRF protection", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "recovery-token" }, 200))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            detail: "If an account can be recovered, a password reset link has been sent.",
+          },
+          202,
+        ),
+      );
+
+    await expect(requestPasswordReset({ email: "learner@example.com" }, { fetcher })).resolves.toBe(
+      "If an account can be recovered, a password reset link has been sent.",
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/auth/password-reset/",
+      expect.objectContaining({
+        body: JSON.stringify({ email: "learner@example.com" }),
+        credentials: "include",
+        headers: expect.objectContaining({ "X-CSRFToken": "recovery-token" }),
+        method: "POST",
+      }),
+    );
+  });
+
+  it("confirms recovery and distinguishes invalid links from weak passwords", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const input = {
+      password: "focused-review-summit-482",
+      token: "opaque-token",
+      uid: "opaque-uid",
+    };
+    const acceptedFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "confirm-token" }, 200))
+      .mockResolvedValueOnce(
+        jsonResponse({ detail: "Password reset complete. Sign in with your new password." }, 200),
+      );
+    const invalidFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "invalid-token" }, 200))
+      .mockResolvedValueOnce(
+        jsonResponse({ detail: "This password reset link is invalid or has expired." }, 400),
+      );
+    const weakPasswordFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "weak-token" }, 200))
+      .mockResolvedValueOnce(jsonResponse({ password: ["This password is too common."] }, 400));
+
+    await expect(confirmPasswordReset(input, { fetcher: acceptedFetcher })).resolves.toBe(
+      "Password reset complete. Sign in with your new password.",
+    );
+    expect(acceptedFetcher).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/auth/password-reset/confirm/",
+      expect.objectContaining({ body: JSON.stringify(input), method: "POST" }),
+    );
+    await expect(confirmPasswordReset(input, { fetcher: invalidFetcher })).rejects.toMatchObject({
+      kind: "recovery",
+      message: "This password reset link is invalid or has expired.",
+    });
+    await expect(
+      confirmPasswordReset(input, { fetcher: weakPasswordFetcher }),
+    ).rejects.toMatchObject({
+      fieldErrors: { password: ["This password is too common."] },
+      kind: "validation",
+    });
   });
 });

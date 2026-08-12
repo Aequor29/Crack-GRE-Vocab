@@ -104,6 +104,22 @@ belong to pre-GA security hardening, before the app is publicly reachable.
 database was migrated before this model existed, recreate the empty local
 database; no prototype user or authentication migration is supported.
 
+## Password recovery contract
+
+Request recovery at <http://localhost:3000/forgot-password>. The API always
+returns the same accepted response for a valid email-shaped request, whether or
+not a recoverable account exists. Development sends reset messages to Django's
+console mail sink; configure `PASSWORD_RESET_FRONTEND_URL` with the same local
+hostname form used by the frontend.
+
+Reset tokens expire after 30 minutes and become invalid after one successful
+password change. A rejected replacement password does not consume the token.
+Changing the password changes Django's authentication hash, so every existing
+session for that learner—including a session in the browser completing the
+reset—is rejected on its next authenticated request. Recovery never preserves
+or silently refreshes an existing session. A fresh transactional mail backend,
+sender, and hosted reset URL are required when non-debug hosting is enabled.
+
 ## Quality checks
 
 Run frontend checks from `gre-vocab-front-end/`:
@@ -174,6 +190,6 @@ narrow automatic policy, 2,399 use explicit provider-sense decisions, and 613
 use explicit editorial overrides. Builds and imports fail closed on changed or
 invalid input, and the application never depends on dictionary APIs at runtime.
 
-Google sign-in, password recovery, email verification delivery, Vercel, preview
+Google sign-in, email verification delivery, Vercel, preview
 deployments, CI/CD, public domains, legacy migrations, and legacy authentication
 are intentionally out of scope until their dedicated milestones.

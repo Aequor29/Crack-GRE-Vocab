@@ -20,6 +20,14 @@ class AccountOpenApiTests(SimpleTestCase):
             "/api/auth/csrf/": ("get", {"200"}),
             "/api/auth/sign-up/": ("post", {"201", "400", "403", "415"}),
             "/api/auth/sign-in/": ("post", {"200", "400", "401", "403", "415"}),
+            "/api/auth/password-reset/": (
+                "post",
+                {"202", "400", "403", "415"},
+            ),
+            "/api/auth/password-reset/confirm/": (
+                "post",
+                {"200", "400", "403", "415"},
+            ),
             "/api/auth/sign-out/": ("post", {"204", "403"}),
             "/api/auth/account/": ("get", {"200", "403"}),
         }
@@ -30,6 +38,8 @@ class AccountOpenApiTests(SimpleTestCase):
         for path in (
             "/api/auth/sign-up/",
             "/api/auth/sign-in/",
+            "/api/auth/password-reset/",
+            "/api/auth/password-reset/confirm/",
             "/api/auth/sign-out/",
         ):
             csrf_header = paths[path]["post"]["parameters"][0]

@@ -54,7 +54,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
+                                    "$ref": "#/components/schemas/ApiMessage"
                                 }
                             }
                         },
@@ -82,6 +82,162 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/CsrfToken"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/password-reset/": {
+            "post": {
+                "operationId": "auth_password_reset_create",
+                "description": "Send recovery instructions without revealing account existence.",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-CSRFToken",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Masked token from GET /api/auth/csrf/.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PasswordResetStartRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiMessage"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuthValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiMessage"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "415": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiMessage"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/password-reset/confirm/": {
+            "post": {
+                "operationId": "auth_password_reset_confirm_create",
+                "description": "Replace a password after validating one short-lived reset token.",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-CSRFToken",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Masked token from GET /api/auth/csrf/.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PasswordResetConfirmRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiMessage"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuthValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiMessage"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "415": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiMessage"
                                 }
                             }
                         },
@@ -149,7 +305,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
+                                    "$ref": "#/components/schemas/ApiMessage"
                                 }
                             }
                         },
@@ -159,7 +315,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
+                                    "$ref": "#/components/schemas/ApiMessage"
                                 }
                             }
                         },
@@ -169,7 +325,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
+                                    "$ref": "#/components/schemas/ApiMessage"
                                 }
                             }
                         },
@@ -210,7 +366,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
+                                    "$ref": "#/components/schemas/ApiMessage"
                                 }
                             }
                         },
@@ -278,7 +434,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
+                                    "$ref": "#/components/schemas/ApiMessage"
                                 }
                             }
                         },
@@ -288,7 +444,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
+                                    "$ref": "#/components/schemas/ApiMessage"
                                 }
                             }
                         },
@@ -334,6 +490,7 @@
         "/api/study/sessions/": {
             "post": {
                 "operationId": "study_session_create",
+                "description": "Plan a bounded Study Session for the authenticated learner.",
                 "tags": [
                     "study"
                 ],
@@ -429,6 +586,7 @@
         "/api/study/sessions/{session_id}/items/{item_id}/answer/": {
             "post": {
                 "operationId": "study_session_answer_create",
+                "description": "Persist a recall answer and return authoritative study progress.",
                 "parameters": [
                     {
                         "in": "path",
@@ -554,6 +712,7 @@
         "/api/study/sessions/active/": {
             "get": {
                 "operationId": "study_session_active_retrieve",
+                "description": "Return the active Study Session or a not-found response.",
                 "tags": [
                     "study"
                 ],
@@ -599,9 +758,9 @@
     },
     "components": {
         "schemas": {
-            "ApiError": {
+            "ApiMessage": {
                 "type": "object",
-                "description": "Describe a non-field API error.",
+                "description": "Describe an API response carrying one human-readable message.",
                 "properties": {
                     "detail": {
                         "type": "string"
@@ -631,6 +790,18 @@
                         }
                     },
                     "password": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "token": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "uid": {
                         "type": "array",
                         "items": {
                             "type": "string"
@@ -708,6 +879,47 @@
                     "display_name",
                     "email",
                     "id"
+                ]
+            },
+            "PasswordResetConfirmRequest": {
+                "type": "object",
+                "description": "Validate the opaque identity, token, and replacement password shape.",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                    },
+                    "token": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "password",
+                    "token",
+                    "uid"
+                ]
+            },
+            "PasswordResetStartRequest": {
+                "type": "object",
+                "description": "Validate a non-enumerating password-recovery request.",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "minLength": 1,
+                        "maxLength": 254
+                    }
+                },
+                "required": [
+                    "email"
                 ]
             },
             "RatingEnum": {
@@ -1021,10 +1233,12 @@
                     },
                     "answered_count": {
                         "type": "integer",
+                        "description": "Return how many planned items have accepted answers.",
                         "readOnly": true
                     },
                     "remaining_count": {
                         "type": "integer",
+                        "description": "Return how many planned items still need an accepted answer.",
                         "readOnly": true
                     },
                     "current_item": {
