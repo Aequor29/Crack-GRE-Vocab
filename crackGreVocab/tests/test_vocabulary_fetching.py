@@ -1,5 +1,6 @@
 """Bounded, resumable network acquisition tests without live HTTP."""
 
+import fcntl
 import io
 import json
 import tempfile
@@ -11,7 +12,6 @@ from urllib.parse import unquote
 from django.test import SimpleTestCase
 from vocabulary.exceptions import EnrichmentFetchError
 from vocabulary.fetching import (
-    _checkpoint_http_cache,
     _request_json,
     fetch_http_fallbacks,
 )
@@ -80,40 +80,24 @@ def _free_dictionary_payload(request) -> dict[str, object]:
 
 
 class FallbackFetchingTests(SimpleTestCase):
-    def test_checkpoint_merges_records_written_by_another_process(self):
-        first_payload: dict[str, object] = {"entries": ["alpha"]}
-        second_payload: dict[str, object] = {"entries": ["beta"]}
-
-        def record(term: str, payload: dict[str, object]) -> dict[str, object]:
-            return {
-                "http_status": 200,
-                "normalized_term": term,
-                "payload": payload,
-                "payload_sha256": sha256_bytes(canonical_json_bytes(payload)),
-                "provider": "freedictionaryapi-v1",
-                "request_url": f"https://example.test/{term.title()}",
-                "status": "ok",
-            }
-
-        alpha = record("alpha", first_payload)
-        beta = record("beta", second_payload)
-        stale_process_records = {("freedictionaryapi-v1", "alpha"): alpha}
-
+    def test_a_second_writer_fails_without_touching_the_cache(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             cache = Path(temporary_directory) / "fallback.jsonl"
-            cache.write_bytes(canonical_json_bytes(beta))
+            lock_path = cache.with_name(f"{cache.name}.lock")
+            with lock_path.open("a+", encoding="utf-8") as owner:
+                fcntl.flock(owner.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with self.assertRaisesRegex(
+                    EnrichmentFetchError,
+                    "another fallback fetch owns cache",
+                ):
+                    fetch_http_fallbacks(
+                        _config(),
+                        ["Lucid"],
+                        cache,
+                        limit=1,
+                    )
 
-            _checkpoint_http_cache(cache, stale_process_records)
-            merged = load_http_cache(cache)
-
-        self.assertEqual(
-            set(merged),
-            {
-                ("freedictionaryapi-v1", "alpha"),
-                ("freedictionaryapi-v1", "beta"),
-            },
-        )
-        self.assertEqual(stale_process_records, merged)
+            self.assertFalse(cache.exists())
 
     def test_bounded_batch_reports_the_full_remaining_queue_and_resumes(self):
         terms = [

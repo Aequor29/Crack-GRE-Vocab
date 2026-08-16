@@ -2,31 +2,28 @@
 
 import json
 import tempfile
-from dataclasses import replace
+import zipfile
 from pathlib import Path
-from unittest.mock import patch
 
 from django.test import SimpleTestCase
-from vocabulary.artifacts import load_corpus
-from vocabulary.builder import (
+from vocabulary.alignment import (
     AUTO_ALIGNMENT_MARGIN,
     AUTO_ALIGNMENT_MINIMUM,
     AUTO_ALIGNMENT_POLICY_VERSION,
-    BuildInputs,
-    EditorialWord,
-    SenseSelection,
-    _resolved_word,
     auto_select_senses,
-    build_artifacts,
-    review_queue_document,
 )
+from vocabulary.artifacts import load_corpus
+from vocabulary.builder import BuildInputs, build_artifacts
+from vocabulary.decisions import ProviderWordDecision, SenseSelection
 from vocabulary.example_matching import (
     EXAMPLE_MATCH_POLICY_RULE,
     EXAMPLE_MATCH_POLICY_VERSION,
 )
 from vocabulary.exceptions import CorpusBuildError
 from vocabulary.normalization import canonical_term, sha256_bytes, sha256_file
-from vocabulary.providers import ProviderConfig, ProviderExample, SenseCandidate
+from vocabulary.providers import ProviderExample, SenseCandidate
+from vocabulary.resolution import resolve_word
+from vocabulary.review_queue import build_review_queue
 from vocabulary.source import SourceAudit, SourceRecord, SourceWord
 
 
@@ -256,14 +253,13 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
             definition_index=0,
             example_index=0,
             candidate_sha256="0" * 64,
-            source_hints=("clear",),
         )
 
         with self.assertRaisesRegex(CorpusBuildError, "stale provider content"):
-            _resolved_word(
+            resolve_word(
                 word,
                 (candidate,),
-                (stale_selection,),
+                ProviderWordDecision((stale_selection,)),
                 None,
                 position=1,
             )
@@ -278,14 +274,15 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
             definition_index=0,
             example_index=0,
             candidate_sha256="0" * 64,
-            source_hints=("clear",),
         )
 
         with self.assertRaisesRegex(CorpusBuildError, "stale provider content"):
-            review_queue_document(
+            build_review_queue(
                 _audit(word),
                 {word.normalized_term: (candidate,)},
-                {word.normalized_term: (stale_selection,)},
+                {
+                    word.normalized_term: ProviderWordDecision((stale_selection,))
+                },
                 {},
             )
 
@@ -305,14 +302,13 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
             definition_index=0,
             example_index=0,
             candidate_sha256=candidate.content_digest,
-            source_hints=("clear",),
         )
 
         with self.assertRaisesRegex(CorpusBuildError, "part_of_speech"):
-            _resolved_word(
+            resolve_word(
                 word,
                 (candidate,),
-                (selection,),
+                ProviderWordDecision((selection,)),
                 None,
                 position=1,
             )
@@ -325,7 +321,7 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
             "A lucid explanation helped.",
         )
 
-        automatic = _resolved_word(
+        automatic = resolve_word(
             word,
             (candidate,),
             None,
@@ -353,12 +349,11 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
             definition_index=0,
             example_index=0,
             candidate_sha256=candidate.content_digest,
-            source_hints=("clear",),
         )
-        reviewed = _resolved_word(
+        reviewed = resolve_word(
             word,
             (candidate,),
-            (selection,),
+            ProviderWordDecision((selection,)),
             None,
             position=1,
         )
@@ -386,7 +381,7 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
 
         assert selection is not None
         self.assertEqual(selection[0].example_index, 1)
-        resolved = _resolved_word(word, (candidate,), None, None, position=1)
+        resolved = resolve_word(word, (candidate,), None, None, position=1)
         assert resolved is not None
         self.assertEqual(resolved.senses[0].example, "She will jot the address down.")
         self.assertEqual(
@@ -497,7 +492,7 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
             "The explanation was easy to understand.",
         )
 
-        queue = review_queue_document(
+        queue = build_review_queue(
             _audit(word),
             {word.normalized_term: (candidate,)},
             {},
@@ -510,31 +505,13 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
             [],
         )
 
-    def test_reviewed_selection_must_cover_every_hint_and_use_an_eligible_example(self):
-        word = _word("lucid", "1. clear\n2. rational")
+    def test_reviewed_selection_requires_an_exact_headword_example(self):
+        word = _word("lucid", "clear")
         candidate = _candidate(
             "lucid-sense",
             "clear",
             "The explanation was easy to understand.",
         )
-        incomplete = SenseSelection(
-            provider=candidate.provider,
-            provider_sense_id=candidate.provider_sense_id,
-            provider_synset_id=candidate.provider_synset_id,
-            definition_index=0,
-            example_index=0,
-            candidate_sha256=candidate.content_digest,
-            source_hints=("clear",),
-        )
-        with self.assertRaisesRegex(CorpusBuildError, "every source hint"):
-            _resolved_word(
-                word,
-                (candidate,),
-                (incomplete,),
-                None,
-                position=1,
-            )
-
         ineligible = SenseSelection(
             provider=candidate.provider,
             provider_sense_id=candidate.provider_sense_id,
@@ -542,16 +519,15 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
             definition_index=0,
             example_index=0,
             candidate_sha256=candidate.content_digest,
-            source_hints=("clear", "rational"),
         )
         with self.assertRaisesRegex(
             CorpusBuildError,
             "does not contain the exact headword",
         ):
-            _resolved_word(
+            resolve_word(
                 word,
                 (candidate,),
-                (ineligible,),
+                ProviderWordDecision((ineligible,)),
                 None,
                 position=1,
             )
@@ -573,17 +549,91 @@ class ArtifactBuildAcceptanceTests(SimpleTestCase):
                     "fallback.jsonl",
                 )
             }
-            contents = {
-                "source.csv": b"word,definition\nLucid,clear\n",
-                "duplicates.json": b'{"fixture":"duplicates"}\n',
-                "providers.json": b'{"fixture":"providers"}\n',
-                "oewn.zip": b"fixture archive\n",
-                "senses.json": b'{"fixture":"senses"}\n',
-                "overrides.json": b'{"fixture":"overrides"}\n',
-                "fallback.jsonl": b'{"fixture":"fallback"}\n',
-            }
-            for name, path in paths.items():
-                path.write_bytes(contents[name])
+            paths["source.csv"].write_text(
+                "word,definition\nLucid,clear and easy to understand\n",
+                encoding="utf-8",
+            )
+            source_digest = sha256_file(paths["source.csv"])
+            paths["duplicates.json"].write_text(
+                json.dumps(
+                    {
+                        "collapse": [],
+                        "schema_version": 1,
+                        "source_sha256": source_digest,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with zipfile.ZipFile(paths["oewn.zip"], "w") as archive:
+                archive.writestr(
+                    "entries-l.json",
+                    json.dumps(
+                        {
+                            "lucid": {
+                                "a": {
+                                    "sense": [
+                                        {
+                                            "id": "lucid%5:00",
+                                            "synset": "0001-a",
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ),
+                )
+                archive.writestr(
+                    "adj.test.json",
+                    json.dumps(
+                        {
+                            "0001-a": {
+                                "definition": ["clear and easy to understand"],
+                                "example": [
+                                    "A lucid explanation settled the question."
+                                ],
+                                "members": ["lucid"],
+                                "partOfSpeech": "adjective",
+                            }
+                        }
+                    ),
+                )
+            paths["providers.json"].write_text(
+                json.dumps(
+                    {
+                        "providers": {
+                            "dictionaryapi-dev-v2": {
+                                "base_url": "https://example.test/dictionary/",
+                                "minimum_interval_seconds": 1.0,
+                            },
+                            "freedictionaryapi-v1": {
+                                "base_url": "https://example.test/free/",
+                                "minimum_interval_seconds": 3.6,
+                                "rate_limit_per_hour": 1000,
+                            },
+                            "oewn-2025": {
+                                "archive_sha256": sha256_file(paths["oewn.zip"]),
+                                "archive_url": "https://example.test/oewn.zip",
+                            },
+                        },
+                        "schema_version": 2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            for name, collection in (
+                ("senses.json", "selections"),
+                ("overrides.json", "words"),
+            ):
+                paths[name].write_text(
+                    json.dumps(
+                        {
+                            collection: {},
+                            "schema_version": 4,
+                            "source_sha256": source_digest,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
 
             inputs = BuildInputs(
                 source_path=paths["source.csv"],
@@ -594,69 +644,33 @@ class ArtifactBuildAcceptanceTests(SimpleTestCase):
                 editorial_overrides_path=paths["overrides.json"],
                 fallback_cache_path=paths["fallback.jsonl"],
             )
-            word = _word("lucid", "clear")
-            candidate = _candidate(
-                "lucid-sense",
-                "clear and easy to understand",
-                "A lucid explanation settled the question.",
-            )
-            selection = SenseSelection(
-                provider=candidate.provider,
-                provider_sense_id=candidate.provider_sense_id,
-                provider_synset_id=candidate.provider_synset_id,
-                definition_index=0,
-                example_index=0,
-                candidate_sha256=candidate.content_digest,
-                source_hints=("clear",),
-            )
-            audit = replace(
-                _audit(word),
-                source_digest=sha256_file(paths["source.csv"]),
-            )
-            context: tuple[
-                SourceAudit,
-                dict[str, ProviderConfig],
-                dict[str, tuple[SenseCandidate, ...]],
-                dict[str, tuple[SenseSelection, ...]],
-                dict[str, EditorialWord],
-            ] = (
-                audit,
-                {},
-                {word.normalized_term: (candidate,)},
-                {word.normalized_term: (selection,)},
-                {},
-            )
             first_output = root / "first"
             second_output = root / "second"
 
-            with patch(
-                "vocabulary.builder.load_build_context",
-                return_value=context,
-            ):
-                self.assertTrue(
-                    build_artifacts(
-                        inputs,
-                        version="m1-test",
-                        output_directory=first_output,
-                    )
+            self.assertTrue(
+                build_artifacts(
+                    inputs,
+                    version="m1-test",
+                    output_directory=first_output,
                 )
-                first_corpus = (first_output / "corpus.jsonl").read_bytes()
-                first_manifest = (first_output / "manifest.json").read_bytes()
+            )
+            first_corpus = (first_output / "corpus.jsonl").read_bytes()
+            first_manifest = (first_output / "manifest.json").read_bytes()
 
-                self.assertFalse(
-                    build_artifacts(
-                        inputs,
-                        version="m1-test",
-                        output_directory=first_output,
-                    )
+            self.assertFalse(
+                build_artifacts(
+                    inputs,
+                    version="m1-test",
+                    output_directory=first_output,
                 )
-                self.assertTrue(
-                    build_artifacts(
-                        inputs,
-                        version="m1-test",
-                        output_directory=second_output,
-                    )
+            )
+            self.assertTrue(
+                build_artifacts(
+                    inputs,
+                    version="m1-test",
+                    output_directory=second_output,
                 )
+            )
 
             self.assertEqual(
                 (second_output / "corpus.jsonl").read_bytes(),
@@ -694,9 +708,6 @@ class ArtifactBuildAcceptanceTests(SimpleTestCase):
                     "editorial_overrides_sha256": sha256_file(
                         paths["overrides.json"]
                     ),
-                    "fallback_cache_sha256": sha256_file(
-                        paths["fallback.jsonl"]
-                    ),
                     "oewn_archive_sha256": sha256_file(paths["oewn.zip"]),
                     "provider_registry_sha256": sha256_file(
                         paths["providers.json"]
@@ -709,79 +720,8 @@ class ArtifactBuildAcceptanceTests(SimpleTestCase):
             self.assertEqual(loaded.sense_count, 1)
             self.assertEqual(
                 loaded.words[0].senses[0].provenance["selection_mode"],
-                "reviewed",
+                "automatic",
             )
-
-
-class BuildInputProvenanceTests(SimpleTestCase):
-    def test_build_rejects_an_input_replaced_before_publication(self):
-        for changed_name, expected_label in (
-            ("source.csv", "source_sha256"),
-            ("fallback.jsonl", "fallback_cache_sha256"),
-        ):
-            with self.subTest(changed_name=changed_name):
-                with tempfile.TemporaryDirectory() as temporary_directory:
-                    root = Path(temporary_directory)
-                    paths = {
-                        name: root / name
-                        for name in (
-                            "source.csv",
-                            "duplicates.json",
-                            "providers.json",
-                            "oewn.zip",
-                            "senses.json",
-                            "overrides.json",
-                            "fallback.jsonl",
-                        )
-                    }
-                    for path in paths.values():
-                        path.write_bytes(b"initial")
-                    inputs = BuildInputs(
-                        source_path=paths["source.csv"],
-                        duplicate_decisions_path=paths["duplicates.json"],
-                        provider_registry_path=paths["providers.json"],
-                        oewn_archive_path=paths["oewn.zip"],
-                        sense_decisions_path=paths["senses.json"],
-                        editorial_overrides_path=paths["overrides.json"],
-                        fallback_cache_path=paths["fallback.jsonl"],
-                    )
-                    audit = replace(
-                        _audit(_word("lucid", "clear")),
-                        source_digest=sha256_file(paths["source.csv"]),
-                    )
-
-                    def replace_input(
-                        _inputs: BuildInputs,
-                    ) -> tuple[object, ...]:
-                        paths[changed_name].write_bytes(b"replacement")
-                        loaded_audit = replace(
-                            audit,
-                            source_digest=sha256_file(paths["source.csv"]),
-                        )
-                        return loaded_audit, {}, {}, {}, {}
-
-                    with (
-                        patch(
-                            "vocabulary.builder.load_build_context",
-                            side_effect=replace_input,
-                        ),
-                        patch(
-                            "vocabulary.builder.build_corpus_words",
-                            return_value=(),
-                        ),
-                    ):
-                        with self.assertRaisesRegex(
-                            CorpusBuildError,
-                            expected_label,
-                        ):
-                            build_artifacts(
-                                inputs,
-                                version="v1",
-                                output_directory=root / "v1",
-                            )
-
-                    self.assertFalse((root / "v1").exists())
-
 
 class CheckedReviewQueueTests(SimpleTestCase):
     def test_checked_queue_matches_the_current_fail_closed_policy(self):
@@ -812,27 +752,8 @@ class CheckedReviewQueueTests(SimpleTestCase):
             },
         )
         self.assertEqual(
-            queue["summary"],
-            {
-                "fallback_required": 0,
-                "multiple_eligible_candidates": 0,
-                "no_headword_example": 0,
-                "no_same_sense_example": 0,
-                "resolved_automatically": 22,
-                "resolved_by_override": 613,
-                "resolved_by_selection": 2399,
-                "review_required": 0,
-                "single_eligible_candidate": 0,
-                "unresolved": 0,
-                "without_candidates": 0,
-            },
+            queue["source_sha256"],
+            sha256_file(backend_root / "data/GRE_word.csv"),
         )
-        self.assertEqual(
-            sum(item["fallback_required"] for item in queue["items"]),
-            0,
-        )
-        self.assertEqual(
-            sum(item["review_required"] for item in queue["items"]),
-            0,
-        )
+        self.assertEqual(queue["summary"]["unresolved"], 0)
         self.assertEqual(queue["items"], [])

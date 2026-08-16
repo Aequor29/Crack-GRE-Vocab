@@ -1,4 +1,4 @@
-"""Management-command parser smoke tests."""
+"""Behavior tests for the public vocabulary management commands."""
 
 import json
 import tempfile
@@ -10,100 +10,30 @@ from django.test import SimpleTestCase
 from vocabulary.management.commands.audit_vocabulary_source import (
     Command as AuditCommand,
 )
-from vocabulary.management.commands.build_vocabulary_corpus import (
-    Command as BuildCommand,
-)
 from vocabulary.management.commands.fetch_vocabulary_fallbacks import (
     Command as FetchCommand,
 )
 from vocabulary.normalization import sha256_file
-from vocabulary.providers import ProviderConfig
+from vocabulary.providers import load_http_cache
+
+
+class _Response:
+    status = 200
+
+    def __init__(self, payload: bytes):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self):
+        return self.payload
 
 
 class VocabularyCommandTests(SimpleTestCase):
-    def test_build_command_uses_a_non_conflicting_corpus_version_option(self):
-        output = StringIO()
-        command = BuildCommand(stdout=output)
-        argv = [
-            "manage.py",
-            "build_vocabulary_corpus",
-            "--source",
-            "words.csv",
-            "--duplicate-decisions",
-            "duplicates.json",
-            "--providers",
-            "providers.json",
-            "--oewn-archive",
-            "oewn.zip",
-            "--sense-decisions",
-            "senses.json",
-            "--editorial-overrides",
-            "overrides.json",
-            "--fallback-cache",
-            "fallback.jsonl",
-            "--corpus-version",
-            "m1-v1",
-            "--output-directory",
-            "versions/m1-v1",
-        ]
-
-        with patch(
-            "vocabulary.management.commands.build_vocabulary_corpus.build_artifacts",
-            return_value=False,
-        ) as build_artifacts:
-            command.run_from_argv(argv)
-
-        self.assertEqual(build_artifacts.call_args.kwargs["version"], "m1-v1")
-        self.assertIn("already identical", output.getvalue())
-
-    def test_fetch_command_passes_the_shared_rate_state_path(self):
-        output = StringIO()
-        command = FetchCommand(stdout=output)
-        config = ProviderConfig(
-            id="freedictionaryapi-v1",
-            kind="http-json",
-            priority=2,
-            parser_version=1,
-            base_url="https://example.test/",
-            rate_limit_per_hour=1000,
-            minimum_interval_seconds=3.6,
-        )
-        argv = [
-            "manage.py",
-            "fetch_vocabulary_fallbacks",
-            "--providers",
-            "providers.json",
-            "--provider",
-            "freedictionaryapi-v1",
-            "--cache",
-            "fallback.jsonl",
-            "--term",
-            "Lucid",
-            "--limit",
-            "1",
-            "--rate-state",
-            ".cache/vocabulary/free.rate-limit",
-        ]
-
-        with (
-            patch(
-                "vocabulary.management.commands.fetch_vocabulary_fallbacks."
-                "load_provider_registry",
-                return_value={config.id: config},
-            ),
-            patch(
-                "vocabulary.management.commands.fetch_vocabulary_fallbacks."
-                "fetch_http_fallbacks",
-                return_value=(1, 0),
-            ) as fetch,
-        ):
-            command.run_from_argv(argv)
-
-        self.assertEqual(
-            fetch.call_args.kwargs["rate_state_path"],
-            Path(".cache/vocabulary/free.rate-limit"),
-        )
-
     def test_audit_command_records_the_actual_source_path(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -121,6 +51,7 @@ class VocabularyCommandTests(SimpleTestCase):
                 encoding="utf-8",
             )
             audit_path = root / "audit.json"
+
             AuditCommand().run_from_argv(
                 [
                     "manage.py",
@@ -136,3 +67,63 @@ class VocabularyCommandTests(SimpleTestCase):
             audit = json.loads(audit_path.read_text(encoding="utf-8"))
 
         self.assertEqual(audit["source"]["path"], str(source))
+
+    def test_fetch_command_persists_a_resumable_provider_response(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            providers = root / "providers.json"
+            providers.write_text(
+                json.dumps(
+                    {
+                        "providers": {
+                            "dictionaryapi-dev-v2": {
+                                "base_url": "https://example.test/dictionary/",
+                                "minimum_interval_seconds": 1.0,
+                            },
+                            "freedictionaryapi-v1": {
+                                "base_url": "https://example.test/free/",
+                                "minimum_interval_seconds": 3.6,
+                                "rate_limit_per_hour": 1000,
+                            },
+                            "oewn-2025": {
+                                "archive_sha256": "0" * 64,
+                                "archive_url": "https://example.test/oewn.zip",
+                            },
+                        },
+                        "schema_version": 2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cache = root / "fallback.jsonl"
+            output = StringIO()
+
+            with patch(
+                "vocabulary.fetching.urlopen",
+                return_value=_Response(
+                    json.dumps({"entries": [], "word": "Lucid"}).encode()
+                ),
+            ):
+                FetchCommand(stdout=output).run_from_argv(
+                    [
+                        "manage.py",
+                        "fetch_vocabulary_fallbacks",
+                        "--providers",
+                        str(providers),
+                        "--provider",
+                        "freedictionaryapi-v1",
+                        "--cache",
+                        str(cache),
+                        "--term",
+                        "Lucid",
+                        "--limit",
+                        "1",
+                        "--rate-state",
+                        str(root / "rate-limit"),
+                    ]
+                )
+            stored = load_http_cache(cache)
+
+        self.assertEqual(set(stored), {("freedictionaryapi-v1", "lucid")})
+        self.assertEqual(stored[("freedictionaryapi-v1", "lucid")]["status"], "ok")
+        self.assertIn("cached 1 response", output.getvalue())

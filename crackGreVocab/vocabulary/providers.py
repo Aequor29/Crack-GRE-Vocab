@@ -20,12 +20,7 @@ from .normalization import (
     sha256_file,
 )
 
-PROVIDER_SCHEMA_VERSION = 1
-EXPECTED_PROVIDER_CONTRACTS = {
-    "dictionaryapi-dev-v2": ("http-json", 1, 3),
-    "freedictionaryapi-v1": ("http-json", 1, 2),
-    "oewn-2025": ("bulk-zip", 1, 1),
-}
+PROVIDER_SCHEMA_VERSION = 2
 HTTP_CACHE_FIELDS = {
     "http_status",
     "normalized_term",
@@ -39,7 +34,7 @@ HTTP_CACHE_FIELDS = {
 
 @dataclass(frozen=True)
 class ProviderConfig:
-    """One checked provider contract."""
+    """Fixed provider behavior combined with checked mutable pins."""
 
     id: str
     kind: str
@@ -51,6 +46,28 @@ class ProviderConfig:
     base_url: str = ""
     rate_limit_per_hour: int | None = None
     minimum_interval_seconds: float = 0.0
+
+
+@dataclass(frozen=True)
+class ProviderSpec:
+    """Code-owned parser and priority behavior for one supported provider."""
+
+    id: str
+    kind: str
+    priority: int
+    parser_version: int
+    version: str = ""
+
+
+PROVIDER_SPECS = {
+    "oewn-2025": ProviderSpec("oewn-2025", "bulk-zip", 1, 1, "2025"),
+    "freedictionaryapi-v1": ProviderSpec(
+        "freedictionaryapi-v1", "http-json", 2, 1
+    ),
+    "dictionaryapi-dev-v2": ProviderSpec(
+        "dictionaryapi-dev-v2", "http-json", 3, 1
+    ),
+}
 
 
 def _metadata_text(value: Any, *, field: str, maximum: int) -> str:
@@ -163,28 +180,45 @@ class SenseCandidate:
 
 
 def load_provider_registry(path: Path) -> dict[str, ProviderConfig]:
-    """Load the checked provider versions, URLs, checksums, and parser versions."""
+    """Combine code-owned provider behavior with checked URLs and limits."""
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise SnapshotError(f"cannot read provider registry at {path}: {exc}") from exc
-    if not isinstance(document, dict) or document.get("schema_version") != 1:
-        raise SnapshotError("provider registry must use schema_version 1")
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"providers", "schema_version"}
+        or document.get("schema_version") != PROVIDER_SCHEMA_VERSION
+    ):
+        raise SnapshotError(
+            f"provider registry must use schema_version {PROVIDER_SCHEMA_VERSION}"
+        )
     providers = document.get("providers")
-    if not isinstance(providers, list) or not providers:
-        raise SnapshotError("provider registry must contain providers")
+    if not isinstance(providers, dict) or set(providers) != set(PROVIDER_SPECS):
+        raise SnapshotError("provider registry must pin every supported provider")
 
     result: dict[str, ProviderConfig] = {}
-    for item in providers:
+    for provider_id, spec in PROVIDER_SPECS.items():
+        item = providers[provider_id]
         if not isinstance(item, dict):
-            raise SnapshotError("each provider registry item must be an object")
+            raise SnapshotError(f"provider pins for {provider_id!r} must be an object")
+        expected_fields = (
+            {"archive_sha256", "archive_url"}
+            if spec.kind == "bulk-zip"
+            else {"base_url", "minimum_interval_seconds"}
+        )
+        allowed_fields = expected_fields | (
+            {"rate_limit_per_hour"} if spec.kind == "http-json" else set()
+        )
+        if not expected_fields <= set(item) or not set(item) <= allowed_fields:
+            raise SnapshotError(f"provider {provider_id!r} has invalid pin fields")
         try:
             config = ProviderConfig(
-                id=str(item["id"]),
-                kind=str(item["kind"]),
-                priority=int(item["priority"]),
-                parser_version=int(item["parser_version"]),
-                version=str(item.get("version", "")),
+                id=spec.id,
+                kind=spec.kind,
+                priority=spec.priority,
+                parser_version=spec.parser_version,
+                version=spec.version,
                 archive_url=str(item.get("archive_url", "")),
                 archive_sha256=str(item.get("archive_sha256", "")),
                 base_url=str(item.get("base_url", "")),
@@ -198,11 +232,9 @@ def load_provider_registry(path: Path) -> dict[str, ProviderConfig]:
                 ),
             )
         except (KeyError, TypeError, ValueError) as exc:
-            raise SnapshotError(f"invalid provider registry item: {item!r}") from exc
-        if config.id in result:
-            raise SnapshotError(f"duplicate provider id {config.id!r}")
-        if config.priority < 1:
-            raise SnapshotError(f"provider {config.id!r} priority must be positive")
+            raise SnapshotError(
+                f"invalid provider pins for {provider_id!r}: {item!r}"
+            ) from exc
         if not math.isfinite(config.minimum_interval_seconds):
             raise SnapshotError(
                 f"provider {config.id!r} request interval must be finite"
@@ -210,12 +242,6 @@ def load_provider_registry(path: Path) -> dict[str, ProviderConfig]:
         if config.rate_limit_per_hour is not None and config.rate_limit_per_hour < 1:
             raise SnapshotError(
                 f"provider {config.id!r} hourly rate limit must be positive"
-            )
-        expected_contract = EXPECTED_PROVIDER_CONTRACTS.get(config.id)
-        actual_contract = (config.kind, config.parser_version, config.priority)
-        if expected_contract != actual_contract:
-            raise SnapshotError(
-                f"unsupported provider contract {config.id}: {actual_contract}"
             )
         if config.kind == "bulk-zip" and (
             not config.archive_url or len(config.archive_sha256) != 64
@@ -798,6 +824,24 @@ def parse_dictionary_api_dev(
     return tuple(result)
 
 
+HTTP_CANDIDATE_PARSERS = {
+    "freedictionaryapi-v1": parse_free_dictionary_api,
+    "dictionaryapi-dev-v2": parse_dictionary_api_dev,
+}
+
+
+def parse_http_candidates(
+    record: dict[str, Any],
+    config: ProviderConfig,
+) -> tuple[SenseCandidate, ...]:
+    """Parse one checked HTTP response using its code-owned provider handler."""
+    try:
+        parser = HTTP_CANDIDATE_PARSERS[config.id]
+    except KeyError as exc:
+        raise SnapshotError(f"no cached response parser for {config.id!r}") from exc
+    return parser(record, config)
+
+
 def load_cached_candidates(
     cache_path: Path,
     registry: dict[str, ProviderConfig],
@@ -837,12 +881,7 @@ def load_cached_candidates(
         if record["status"] == "not-found":
             continue
         try:
-            if provider == "freedictionaryapi-v1":
-                candidates = parse_free_dictionary_api(record, config)
-            elif provider == "dictionaryapi-dev-v2":
-                candidates = parse_dictionary_api_dev(record, config)
-            else:
-                raise SnapshotError(f"no cached response parser for {provider!r}")
+            candidates = parse_http_candidates(record, config)
         except SnapshotError as exc:
             raise SnapshotError(
                 f"invalid cached response for provider {provider!r}, "

@@ -147,49 +147,54 @@ class ProviderParserTests(SimpleTestCase):
             ):
                 load_cached_candidates(cache_path, {config.id: config})
 
-    def test_registry_rejects_unknown_parsers_and_nonpositive_limits(self):
-        invalid_providers = (
-            {
-                "archive_sha256": "0" * 64,
-                "archive_url": "https://example.test/oewn.zip",
-                "id": "oewn-2025",
-                "kind": "bulk-zip",
-                "parser_version": 99,
-                "priority": 1,
+    def test_registry_accepts_only_mutable_pins_for_supported_providers(self):
+        valid = {
+            "providers": {
+                "dictionaryapi-dev-v2": {
+                    "base_url": "https://example.test/dictionary/",
+                    "minimum_interval_seconds": 1.0,
+                },
+                "freedictionaryapi-v1": {
+                    "base_url": "https://example.test/free/",
+                    "minimum_interval_seconds": 3.6,
+                    "rate_limit_per_hour": 1000,
+                },
+                "oewn-2025": {
+                    "archive_sha256": "0" * 64,
+                    "archive_url": "https://example.test/oewn.zip",
+                },
             },
-            {
-                "base_url": "https://example.test/",
-                "id": "freedictionaryapi-v1",
-                "kind": "http-json",
-                "minimum_interval_seconds": 3.6,
-                "parser_version": 1,
-                "priority": 0,
-                "rate_limit_per_hour": 1000,
-            },
-            {
-                "base_url": "https://example.test/",
-                "id": "freedictionaryapi-v1",
-                "kind": "http-json",
-                "minimum_interval_seconds": 3.6,
-                "parser_version": 1,
-                "priority": 1,
-                "rate_limit_per_hour": 0,
-            },
-            {
-                "archive_sha256": "0" * 64,
-                "archive_url": "https://example.test/oewn.zip",
-                "id": "oewn-2025",
-                "kind": "bulk-zip",
-                "parser_version": 1,
-                "priority": 2,
-            },
-        )
+            "schema_version": 2,
+        }
+        invalid_documents = []
+        extra_contract = json.loads(json.dumps(valid))
+        extra_contract["providers"]["freedictionaryapi-v1"]["parser_version"] = 99
+        invalid_documents.append(extra_contract)
+        bad_limit = json.loads(json.dumps(valid))
+        bad_limit["providers"]["freedictionaryapi-v1"]["rate_limit_per_hour"] = 0
+        invalid_documents.append(bad_limit)
+        missing_provider = json.loads(json.dumps(valid))
+        del missing_provider["providers"]["dictionaryapi-dev-v2"]
+        invalid_documents.append(missing_provider)
+
         with tempfile.TemporaryDirectory() as temporary_directory:
             registry_path = Path(temporary_directory) / "providers.json"
-            for provider in invalid_providers:
-                with self.subTest(provider=provider):
+            registry_path.write_text(json.dumps(valid), encoding="utf-8")
+            registry = load_provider_registry(registry_path)
+            self.assertEqual(
+                [config.id for config in registry.values()],
+                [
+                    "oewn-2025",
+                    "freedictionaryapi-v1",
+                    "dictionaryapi-dev-v2",
+                ],
+            )
+            self.assertEqual(registry["oewn-2025"].parser_version, 1)
+
+            for document in invalid_documents:
+                with self.subTest(document=document):
                     registry_path.write_text(
-                        json.dumps({"providers": [provider], "schema_version": 1}),
+                        json.dumps(document),
                         encoding="utf-8",
                     )
                     with self.assertRaises(SnapshotError):

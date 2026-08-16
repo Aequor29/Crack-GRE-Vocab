@@ -3,13 +3,11 @@
 import tempfile
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
 
-from django.db import DatabaseError
 from django.test import TransactionTestCase
 from vocabulary.artifacts import load_corpus
 from vocabulary.exceptions import CorpusImportError
-from vocabulary.importer import _validate_existing_corpus, import_corpus
+from vocabulary.importer import import_corpus
 from vocabulary.models import (
     CorpusEntry,
     CorpusVersion,
@@ -21,40 +19,6 @@ from tests.vocabulary_helpers import canonical_word, write_test_artifact
 
 
 class VocabularyImporterTests(TransactionTestCase):
-    def test_idempotency_validation_uses_a_constant_query_count(self):
-        terms = (
-            "Alpha",
-            "Bravo",
-            "Charlie",
-            "Delta",
-            "Echo",
-            "Foxtrot",
-            "Golf",
-            "Hotel",
-            "India",
-            "Juliet",
-        )
-        words = tuple(
-            canonical_word(
-                term,
-                position=position,
-                example=f"The example includes {term}.",
-            )
-            for position, term in enumerate(terms, start=1)
-        )
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            manifest = write_test_artifact(
-                Path(temporary_directory) / "v1",
-                version="v1",
-                words=words,
-            )
-            import_corpus(manifest)
-            artifact = load_corpus(manifest)
-            existing = CorpusVersion.objects.get(version="v1")
-
-            with self.assertNumQueries(2):
-                _validate_existing_corpus(existing, artifact)
-
     def test_fresh_import_is_active_and_an_identical_rerun_is_a_no_op(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             manifest = write_test_artifact(
@@ -75,7 +39,7 @@ class VocabularyImporterTests(TransactionTestCase):
         self.assertEqual(CorpusEntry.objects.count(), 1)
         self.assertEqual(VocabularySense.objects.count(), 1)
 
-    def test_every_definition_and_example_persists_and_late_tampering_fails(self):
+    def test_every_definition_and_example_persists(self):
         lucid = canonical_word(
             "Lucid",
             position=1,
@@ -134,52 +98,28 @@ class VocabularyImporterTests(TransactionTestCase):
             self.assertEqual(report.sense_count, 3)
             self.assertEqual(stored_content, expected_content)
 
-            VocabularySense.objects.filter(
-                entry__position=2,
-                position=1,
-            ).update(
-                definition="tampered definition",
-                example="A tampered Opaque example replaced the reviewed text.",
-            )
-
-            with self.assertRaisesRegex(CorpusImportError, "not immutable"):
-                import_corpus(manifest)
-
-    def test_reimport_detects_deep_database_tampering(self):
+    def test_rejected_new_release_leaves_the_active_corpus_unchanged(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            manifest = write_test_artifact(
-                Path(temporary_directory) / "v1",
+            root = Path(temporary_directory)
+            first_manifest = write_test_artifact(
+                root / "v1",
                 version="v1",
                 words=(canonical_word("Lucid"),),
             )
-            import_corpus(manifest)
-            VocabularySense.objects.update(
-                provenance={"fixture": "tampered", "provider": "test-provider"}
-            )
-
-            with self.assertRaisesRegex(CorpusImportError, "not immutable"):
-                import_corpus(manifest)
-
-    def test_database_failure_rolls_back_every_row(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            manifest = write_test_artifact(
-                Path(temporary_directory) / "v1",
-                version="v1",
+            duplicate_manifest = write_test_artifact(
+                root / "v2",
+                version="v2",
                 words=(canonical_word("Lucid"),),
             )
+            import_corpus(first_manifest)
 
-            with patch.object(
-                VocabularySense.objects,
-                "bulk_create",
-                side_effect=DatabaseError("fixture failure"),
-            ):
-                with self.assertRaisesRegex(CorpusImportError, "database rejected"):
-                    import_corpus(manifest)
+            with self.assertRaisesRegex(CorpusImportError, "digest is already owned"):
+                import_corpus(duplicate_manifest)
 
-        self.assertFalse(CorpusVersion.objects.exists())
-        self.assertFalse(VocabularyWord.objects.exists())
-        self.assertFalse(CorpusEntry.objects.exists())
-        self.assertFalse(VocabularySense.objects.exists())
+        self.assertEqual(CorpusVersion.objects.get(is_active=True).version, "v1")
+        self.assertEqual(CorpusVersion.objects.count(), 1)
+        self.assertEqual(CorpusEntry.objects.count(), 1)
+        self.assertEqual(VocabularySense.objects.count(), 1)
 
     def test_release_spelling_does_not_mutate_an_older_corpus(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

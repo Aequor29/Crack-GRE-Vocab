@@ -10,6 +10,7 @@ from vocabulary.artifacts import load_corpus
 from vocabulary.builder import write_artifact_directory
 from vocabulary.exceptions import CorpusBuildError, CorpusImportError
 from vocabulary.normalization import canonical_json_bytes, sha256_bytes
+from vocabulary.source import audit_source
 
 from tests.vocabulary_helpers import (
     canonical_word,
@@ -191,21 +192,23 @@ class VocabularyArtifactTests(SimpleTestCase):
 
 
 class CheckedCorpusArtifactTests(SimpleTestCase):
-    def test_milestone_one_release_matches_the_reviewed_manifest(self):
+    def test_milestone_one_release_matches_the_audited_source_membership(self):
         backend_root = Path(__file__).resolve().parents[1]
         artifact = load_corpus(
             backend_root
-            / "data/vocabulary/versions/m1-v1/manifest.json"
+            / "data/vocabulary/versions/m1-v2/manifest.json"
+        )
+        audit = audit_source(
+            backend_root / "data/GRE_word.csv",
+            backend_root / "data/vocabulary/duplicate-decisions.json",
         )
 
-        self.assertEqual(artifact.version, "m1-v1")
-        self.assertEqual(len(artifact.words), 3034)
-        self.assertEqual(artifact.sense_count, 3389)
         self.assertEqual(
-            artifact.source_digest,
-            "8c929941d992eee05a3014a7f08b0a130a4104b142800cd987b8500a17998efb",
+            tuple(word.normalized_term for word in artifact.words),
+            tuple(word.normalized_term for word in audit.words),
         )
-        self.assertEqual(
-            artifact.corpus_digest,
-            "15c3ea744e2c728a89c2ee1c20dec9713fdfa2d7f38ce8f313b3b819e973f1ad",
+        self.assertEqual(artifact.source_digest, audit.source_digest)
+        self.assertTrue(
+            all(word.senses for word in artifact.words),
+            "every source word must retain learning content",
         )
