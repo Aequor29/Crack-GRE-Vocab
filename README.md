@@ -6,9 +6,9 @@ local-only cold rebuild: the previous prototype is retired, and Milestone 1 is
 not a generally available product.
 
 The current foundation includes a supported Django/PostgreSQL backend, a clean
-Next.js application shell, a generated typed API boundary, and email/password
-Learner Accounts backed by Django sessions. Study flows, progress views, hosted
-infrastructure, and deployment automation remain separately scoped work.
+Next.js application shell, a generated typed API boundary, and Learner Accounts
+backed by Django sessions. Study flows, progress views, hosted infrastructure,
+and deployment automation remain separately scoped work.
 
 ## Repository layout
 
@@ -120,6 +120,27 @@ reset—is rejected on its next authenticated request. Recovery never preserves
 or silently refreshes an existing session. A fresh transactional mail backend,
 sender, and hosted reset URL are required when non-debug hosting is enabled.
 
+## Google sign-in contract
+
+Google sign-in uses the authorization-code OpenID Connect flow through Django.
+The backend validates provider state, nonce, signature, issuer, audience, and
+token expiry through Authlib, then uses Google's stable `sub` claim as the
+external identity key. Provider access and refresh tokens are not persisted.
+
+A verified Google identity with a new email creates a learner with an unusable
+local password. A returning `sub` signs into its existing learner even if the
+provider email later changes. A verified email that matches an existing
+password account never merges silently: the callback creates a ten-minute
+pending link and requires the learner's current password before attaching the
+Google identity. A different Google subject already associated with that email
+is an explicit conflict.
+
+Google sign-in stays disabled when both credential settings are empty. For
+local testing, create fresh Web OAuth credentials and configure the exact
+callback shown in `crackGreVocab/.env.example`; never reuse prototype OAuth
+credentials. Non-debug hosting requires explicit hosted callback and frontend
+URLs.
+
 ## Quality checks
 
 Run frontend checks from `gre-vocab-front-end/`:
@@ -190,6 +211,6 @@ narrow automatic policy, 2,399 use explicit provider-sense decisions, and 613
 use explicit editorial overrides. Builds and imports fail closed on changed or
 invalid input, and the application never depends on dictionary APIs at runtime.
 
-Google sign-in, email verification delivery, Vercel, preview
-deployments, CI/CD, public domains, legacy migrations, and legacy authentication
-are intentionally out of scope until their dedicated milestones.
+Email verification delivery, Vercel, preview deployments, CI/CD, public domains,
+legacy migrations, and legacy authentication are intentionally out of scope
+until their dedicated milestones.

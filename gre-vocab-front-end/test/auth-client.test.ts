@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  cancelGoogleLink,
+  confirmGoogleLink,
   confirmPasswordReset,
   getCurrentAccount,
+  googleSignInUrl,
   requestPasswordReset,
   signIn,
   signOut,
@@ -170,6 +173,47 @@ describe("account API client", () => {
     );
   });
 
+  it("builds the provider start URL from the configured API origin", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+
+    expect(googleSignInUrl()).toBe("http://localhost:8000/api/auth/google/start/");
+  });
+
+  it("confirms and cancels a pending Google link with fresh CSRF tokens", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const confirmationFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "confirm-token" }, 200))
+      .mockResolvedValueOnce(jsonResponse(account, 200));
+    const cancellationFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "cancel-token" }, 200))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      confirmGoogleLink({ password: "durable-recall-river-927" }, { fetcher: confirmationFetcher }),
+    ).resolves.toEqual(account);
+    await expect(cancelGoogleLink({ fetcher: cancellationFetcher })).resolves.toBeUndefined();
+
+    expect(confirmationFetcher).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/auth/google/link/confirm/",
+      expect.objectContaining({
+        body: JSON.stringify({ password: "durable-recall-river-927" }),
+        credentials: "include",
+        method: "POST",
+      }),
+    );
+    expect(cancellationFetcher).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/auth/google/link/cancel/",
+      expect.objectContaining({
+        credentials: "include",
+        method: "POST",
+      }),
+    );
+  });
+
   it("confirms recovery and distinguishes invalid links from weak passwords", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
     const input = {
@@ -211,6 +255,35 @@ describe("account API client", () => {
     ).rejects.toMatchObject({
       fieldErrors: { password: ["This password is too common."] },
       kind: "validation",
+    });
+  });
+
+  it("keeps Google link authentication and identity conflicts explicit", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const wrongPasswordFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "first-token" }, 200))
+      .mockResolvedValueOnce(
+        jsonResponse({ detail: "Enter the current password for this account." }, 401),
+      );
+    const conflictFetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "second-token" }, 200))
+      .mockResolvedValueOnce(
+        jsonResponse({ detail: "This Google identity cannot be linked to that account." }, 409),
+      );
+
+    await expect(
+      confirmGoogleLink({ password: "wrong" }, { fetcher: wrongPasswordFetcher }),
+    ).rejects.toMatchObject({
+      kind: "credentials",
+      message: "Enter the current password for this account.",
+    });
+    await expect(
+      confirmGoogleLink({ password: "durable-recall-river-927" }, { fetcher: conflictFetcher }),
+    ).rejects.toMatchObject({
+      kind: "conflict",
+      message: "This Google identity cannot be linked to that account.",
     });
   });
 });

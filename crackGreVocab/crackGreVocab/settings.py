@@ -11,6 +11,7 @@ from .config import (
     env_list,
     env_string,
     http_url,
+    optional_env_string,
     postgres_database_url,
     required_env,
 )
@@ -160,6 +161,44 @@ DEFAULT_FROM_EMAIL = env_string(
     "DEFAULT_FROM_EMAIL",
     default=("Crack GRE Vocab <no-reply@localhost>" if DEBUG else None),
 )
+
+GOOGLE_OAUTH_CLIENT_ID = optional_env_string("GOOGLE_OAUTH_CLIENT_ID")
+GOOGLE_OAUTH_CLIENT_SECRET = optional_env_string("GOOGLE_OAUTH_CLIENT_SECRET")
+if bool(GOOGLE_OAUTH_CLIENT_ID) != bool(GOOGLE_OAUTH_CLIENT_SECRET):
+    raise ImproperlyConfigured(
+        "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET must be configured "
+        "together."
+    )
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_OAUTH_CLIENT_ID)
+if GOOGLE_OAUTH_ENABLED:
+    GOOGLE_OAUTH_CALLBACK_URL = http_url(
+        "GOOGLE_OAUTH_CALLBACK_URL",
+        default=(
+            "http://localhost:8000/api/auth/google/callback/" if DEBUG else None
+        ),
+    )
+    GOOGLE_OAUTH_FRONTEND_ORIGIN = http_url(
+        "GOOGLE_OAUTH_FRONTEND_ORIGIN",
+        default="http://localhost:3000" if DEBUG else None,
+    )
+    if not DEBUG and (
+        not GOOGLE_OAUTH_CALLBACK_URL.startswith("https://")
+        or not GOOGLE_OAUTH_FRONTEND_ORIGIN.startswith("https://")
+    ):
+        raise ImproperlyConfigured(
+            "Hosted Google OAuth callback and frontend URLs must use HTTPS."
+        )
+else:
+    GOOGLE_OAUTH_CALLBACK_URL = ""
+    GOOGLE_OAUTH_FRONTEND_ORIGIN = (
+        http_url(
+            "GOOGLE_OAUTH_FRONTEND_ORIGIN",
+            default="http://localhost:3000",
+        )
+        if DEBUG or optional_env_string("GOOGLE_OAUTH_FRONTEND_ORIGIN")
+        else ""
+    )
+GOOGLE_OAUTH_PENDING_LINK_MAX_AGE = 10 * 60
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

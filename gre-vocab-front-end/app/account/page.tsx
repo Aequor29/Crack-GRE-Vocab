@@ -6,7 +6,12 @@ export const metadata: Metadata = {
   title: "Your account",
 };
 
-export default function AccountPage() {
+type AccountPageProps = {
+  searchParams: Promise<{ google?: string | string[] }>;
+};
+
+export default async function AccountPage({ searchParams }: AccountPageProps) {
+  const googleConnected = (await searchParams).google === "connected";
   return (
     <main
       className="mx-auto min-h-[calc(100svh-8rem)] max-w-4xl px-5 py-16 sm:px-8 lg:py-24"
@@ -24,7 +29,7 @@ export default function AccountPage() {
         <p className="mb-10 mt-4 max-w-2xl leading-7 text-foreground/65">
           Django keeps this session on the server. No bearer token or prototype account is reused.
         </p>
-        <AccountPanel />
+        <AccountPanel googleConnected={googleConnected} />
       </section>
     </main>
   );

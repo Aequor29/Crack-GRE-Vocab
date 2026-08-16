@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AuthApiError } from "@/lib/api/auth";
 
-export function AccountPanel() {
+export function AccountPanel({ googleConnected = false }: { googleConnected?: boolean }) {
   const auth = useAuth();
   const router = useRouter();
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -77,6 +77,11 @@ export function AccountPanel() {
 
   return (
     <div className="space-y-8">
+      {googleConnected ? (
+        <p className="rounded-2xl bg-accent/10 p-4 text-sm font-medium" role="status">
+          Google sign-in is connected to this account.
+        </p>
+      ) : null}
       <dl className="divide-y divide-black/10 rounded-3xl border border-black/10 dark:divide-white/10 dark:border-white/10">
         <div className="grid gap-1 p-5 sm:grid-cols-[8rem_1fr] sm:gap-4">
           <dt className="text-sm font-bold text-foreground/60">Display name</dt>

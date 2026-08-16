@@ -92,6 +92,12 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     password = serializers.CharField(trim_whitespace=False, write_only=True)
 
 
+class GoogleLinkConfirmSerializer(serializers.Serializer):
+    """Validate password proof for an explicitly pending Google link."""
+
+    password = serializers.CharField(trim_whitespace=False, write_only=True)
+
+
 class CsrfTokenSerializer(serializers.Serializer):
     """Return a masked CSRF token for one unsafe request."""
 
