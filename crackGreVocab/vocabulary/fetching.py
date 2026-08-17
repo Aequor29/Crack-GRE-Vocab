@@ -16,6 +16,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from .exceptions import EnrichmentFetchError, SnapshotError
+from .files import atomic_replace_bytes
 from .normalization import (
     canonical_json_bytes,
     canonical_term,
@@ -31,32 +32,11 @@ from .providers import (
 OpenUrl = Callable[..., Any]
 
 
-def _replace_bytes(path: Path, content: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(descriptor, "wb") as destination:
-            destination.write(content)
-            destination.flush()
-            os.fsync(destination.fileno())
-        os.replace(temporary_name, path)
-    except BaseException:
-        try:
-            os.unlink(temporary_name)
-        except FileNotFoundError:
-            pass
-        raise
-
-
 def download_pinned_archive(
     config: ProviderConfig,
     destination: Path,
     *,
-    open_url: OpenUrl = urlopen,
+    open_url: OpenUrl | None = None,
 ) -> bool:
     """Download one pinned bulk archive atomically; return whether it changed."""
     if config.kind != "bulk-zip":
@@ -76,7 +56,7 @@ def download_pinned_archive(
             headers={"User-Agent": "Crack-GRE-Vocab-corpus-builder/1"},
         )
         try:
-            response = open_url(request, timeout=120)
+            response = (open_url or urlopen)(request, timeout=120)
             with response, os.fdopen(descriptor, "wb") as output:
                 while chunk := response.read(1024 * 1024):
                     output.write(chunk)
@@ -224,7 +204,7 @@ def _write_http_cache(
     records: dict[tuple[str, str], dict[str, Any]],
 ) -> None:
     content = b"".join(canonical_json_bytes(records[key]) for key in sorted(records))
-    _replace_bytes(path, content)
+    atomic_replace_bytes(path, content)
 
 
 def _checkpoint_http_cache(

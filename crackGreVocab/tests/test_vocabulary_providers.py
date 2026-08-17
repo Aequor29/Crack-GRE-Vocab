@@ -19,6 +19,8 @@ from vocabulary.providers import (
     parse_free_dictionary_api,
 )
 
+from tests.vocabulary_helpers import provider_registry_document
+
 
 class ProviderParserTests(SimpleTestCase):
     def test_http_cache_requires_exact_canonical_status_metadata(self):
@@ -148,24 +150,7 @@ class ProviderParserTests(SimpleTestCase):
                 load_cached_candidates(cache_path, {config.id: config})
 
     def test_registry_accepts_only_mutable_pins_for_supported_providers(self):
-        valid = {
-            "providers": {
-                "dictionaryapi-dev-v2": {
-                    "base_url": "https://example.test/dictionary/",
-                    "minimum_interval_seconds": 1.0,
-                },
-                "freedictionaryapi-v1": {
-                    "base_url": "https://example.test/free/",
-                    "minimum_interval_seconds": 3.6,
-                    "rate_limit_per_hour": 1000,
-                },
-                "oewn-2025": {
-                    "archive_sha256": "0" * 64,
-                    "archive_url": "https://example.test/oewn.zip",
-                },
-            },
-            "schema_version": 2,
-        }
+        valid = provider_registry_document("0" * 64)
         invalid_documents = []
         extra_contract = json.loads(json.dumps(valid))
         extra_contract["providers"]["freedictionaryapi-v1"]["parser_version"] = 99

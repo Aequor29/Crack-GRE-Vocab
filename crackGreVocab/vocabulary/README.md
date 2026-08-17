@@ -160,7 +160,9 @@ Run commands from `crackGreVocab` with the branch-local virtual environment.
    ```
 
    Identical inputs produce identical bytes and an identical rerun is a no-op.
-   Reusing a release directory with different bytes fails.
+   Reusing a release directory with different bytes fails. Each build input is
+   read once into an immutable byte snapshot; parsing and manifest SHA-256 values
+   use that same snapshot, so a release cannot describe bytes it did not consume.
 
 7. Validate and atomically import the release into PostgreSQL:
 

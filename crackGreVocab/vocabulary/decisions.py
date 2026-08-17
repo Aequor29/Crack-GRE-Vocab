@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .exceptions import CorpusBuildError
+from .files import FileSnapshot
 from .normalization import canonical_prose, canonical_term, collapse_whitespace
 
 DECISION_SCHEMA_VERSION = 4
@@ -73,11 +74,13 @@ class EditorialWord:
     review_note: str = ""
 
 
-def _load_document(path: Path, *, label: str) -> dict[str, Any]:
+def _load_document(snapshot: FileSnapshot, *, label: str) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise CorpusBuildError(f"cannot read {label} at {path}: {exc}") from exc
+        value = json.loads(snapshot.content)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise CorpusBuildError(
+            f"cannot read {label} at {snapshot.path}: {exc}"
+        ) from exc
     if not isinstance(value, dict):
         raise CorpusBuildError(f"{label} must be a JSON object")
     return value
@@ -97,13 +100,13 @@ def _review_note(value: object, *, label: str) -> str:
     return note
 
 
-def load_sense_decisions(
-    path: Path,
+def load_sense_decisions_snapshot(
+    snapshot: FileSnapshot,
     *,
     source_digest: str,
 ) -> dict[str, ProviderWordDecision]:
-    """Load reviewed provider selections bound to the current source digest."""
-    document = _load_document(path, label="sense decisions")
+    """Load provider selections from exact bytes bound to the source digest."""
+    document = _load_document(snapshot, label="sense decisions")
     if set(document) != {"schema_version", "selections", "source_sha256"}:
         raise CorpusBuildError("sense decisions have invalid top-level fields")
     if document.get("schema_version") != DECISION_SCHEMA_VERSION:
@@ -192,13 +195,26 @@ def load_sense_decisions(
     return selections
 
 
-def load_editorial_overrides(
+def load_sense_decisions(
     path: Path,
     *,
     source_digest: str,
+) -> dict[str, ProviderWordDecision]:
+    """Load reviewed provider selections bound to the current source digest."""
+    try:
+        snapshot = FileSnapshot.read(path)
+    except OSError as exc:
+        raise CorpusBuildError(f"cannot read sense decisions at {path}: {exc}") from exc
+    return load_sense_decisions_snapshot(snapshot, source_digest=source_digest)
+
+
+def load_editorial_overrides_snapshot(
+    snapshot: FileSnapshot,
+    *,
+    source_digest: str,
 ) -> dict[str, EditorialWord]:
-    """Load checked local definition/example pairs for unresolved words."""
-    document = _load_document(path, label="editorial overrides")
+    """Load checked local learning content from exact already-read bytes."""
+    document = _load_document(snapshot, label="editorial overrides")
     if set(document) != {"schema_version", "source_sha256", "words"}:
         raise CorpusBuildError("editorial overrides have invalid top-level fields")
     if document.get("schema_version") != DECISION_SCHEMA_VERSION:
@@ -303,3 +319,18 @@ def load_editorial_overrides(
             ),
         )
     return overrides
+
+
+def load_editorial_overrides(
+    path: Path,
+    *,
+    source_digest: str,
+) -> dict[str, EditorialWord]:
+    """Load checked local definition/example pairs for unresolved words."""
+    try:
+        snapshot = FileSnapshot.read(path)
+    except OSError as exc:
+        raise CorpusBuildError(
+            f"cannot read editorial overrides at {path}: {exc}"
+        ) from exc
+    return load_editorial_overrides_snapshot(snapshot, source_digest=source_digest)

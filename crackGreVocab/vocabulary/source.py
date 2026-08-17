@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from .exceptions import SourceAuditError
-from .normalization import canonical_term, sha256_bytes
+from .files import FileSnapshot
+from .normalization import canonical_term
 
 SOURCE_SCHEMA_VERSION = 1
 
@@ -80,12 +81,16 @@ class SourceAudit:
         }
 
 
-def _load_decisions(path: Path, *, source_digest: str) -> dict[str, tuple[int, ...]]:
+def _load_decisions(
+    snapshot: FileSnapshot,
+    *,
+    source_digest: str,
+) -> dict[str, tuple[int, ...]]:
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        document = json.loads(snapshot.content)
+    except (UnicodeError, json.JSONDecodeError) as exc:
         raise SourceAuditError(
-            f"cannot read duplicate decisions at {path}: {exc}"
+            f"cannot read duplicate decisions at {snapshot.path}: {exc}"
         ) from exc
 
     if not isinstance(document, dict) or document.get("schema_version") != 1:
@@ -120,14 +125,15 @@ def _load_decisions(path: Path, *, source_digest: str) -> dict[str, tuple[int, .
     return decisions
 
 
-def audit_source(source_path: Path, duplicate_decisions_path: Path) -> SourceAudit:
-    """Validate the source and require exact decisions for every duplicate term."""
+def audit_source_snapshots(
+    source: FileSnapshot,
+    duplicate_decisions: FileSnapshot,
+) -> SourceAudit:
+    """Audit exact source and duplicate-decision bytes already read from disk."""
     records: list[SourceRecord] = []
     try:
-        source_content = source_path.read_bytes()
-        source_digest = sha256_bytes(source_content)
-        with io.StringIO(source_content.decode("utf-8"), newline="") as source:
-            reader = csv.reader(source, strict=True)
+        with io.StringIO(source.content.decode("utf-8"), newline="") as source_file:
+            reader = csv.reader(source_file, strict=True)
             header = next(reader, None)
             if header != ["word", "definition"]:
                 raise SourceAuditError(
@@ -160,7 +166,7 @@ def audit_source(source_path: Path, duplicate_decisions_path: Path) -> SourceAud
                 )
     except SourceAuditError:
         raise
-    except (OSError, UnicodeError, csv.Error) as exc:
+    except (UnicodeError, csv.Error) as exc:
         raise SourceAuditError(f"cannot parse GRE_word.csv: {exc}") from exc
 
     if not records:
@@ -170,7 +176,10 @@ def audit_source(source_path: Path, duplicate_decisions_path: Path) -> SourceAud
     for record in records:
         grouped[record.normalized_term].append(record)
 
-    decisions = _load_decisions(duplicate_decisions_path, source_digest=source_digest)
+    decisions = _load_decisions(
+        duplicate_decisions,
+        source_digest=source.sha256,
+    )
     actual_duplicates = {
         normalized_term: tuple(record.number for record in grouped_records)
         for normalized_term, grouped_records in grouped.items()
@@ -203,7 +212,7 @@ def audit_source(source_path: Path, duplicate_decisions_path: Path) -> SourceAud
     )
 
     return SourceAudit(
-        source_digest=source_digest,
+        source_digest=source.sha256,
         records=tuple(records),
         words=words,
         duplicate_groups=duplicate_groups,
@@ -229,3 +238,18 @@ def audit_source(source_path: Path, duplicate_decisions_path: Path) -> SourceAud
             record.term != record.normalized_term for record in records
         ),
     )
+
+
+def audit_source(source_path: Path, duplicate_decisions_path: Path) -> SourceAudit:
+    """Validate the source and require exact decisions for every duplicate term."""
+    try:
+        source = FileSnapshot.read(source_path)
+    except OSError as exc:
+        raise SourceAuditError(f"cannot parse GRE_word.csv: {exc}") from exc
+    try:
+        duplicate_decisions = FileSnapshot.read(duplicate_decisions_path)
+    except OSError as exc:
+        raise SourceAuditError(
+            f"cannot read duplicate decisions at {duplicate_decisions_path}: {exc}"
+        ) from exc
+    return audit_source_snapshots(source, duplicate_decisions)

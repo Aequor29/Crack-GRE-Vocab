@@ -17,25 +17,25 @@ from .artifacts import (
 from .decisions import (
     EditorialWord,
     ProviderWordDecision,
-    load_editorial_overrides,
-    load_sense_decisions,
+    load_editorial_overrides_snapshot,
+    load_sense_decisions_snapshot,
 )
 from .exceptions import CorpusBuildError, SnapshotError, SourceAuditError
+from .files import FileSnapshot
 from .normalization import (
     canonical_json_bytes,
     canonical_version,
     sha256_bytes,
-    sha256_file,
 )
 from .providers import (
     SenseCandidate,
-    load_cached_candidates,
-    load_oewn_candidates,
-    load_provider_registry,
+    load_cached_candidates_snapshot,
+    load_oewn_candidates_snapshot,
+    load_provider_registry_snapshot,
 )
 from .resolution import build_corpus_words
 from .review_queue import build_review_queue, write_review_queue
-from .source import SourceAudit, audit_source
+from .source import SourceAudit, audit_source_snapshots
 
 
 @dataclass(frozen=True)
@@ -61,21 +61,85 @@ class BuildContext:
     overrides: dict[str, EditorialWord]
 
 
-def _load_build_context(inputs: BuildInputs) -> BuildContext:
+@dataclass(frozen=True)
+class BuildInputSnapshots:
+    """Exact bytes consumed from every checked input in one build attempt."""
+
+    source: FileSnapshot
+    duplicate_decisions: FileSnapshot
+    provider_registry: FileSnapshot
+    oewn_archive: FileSnapshot
+    sense_decisions: FileSnapshot
+    editorial_overrides: FileSnapshot
+    fallback_cache: FileSnapshot | None
+
+    def manifest_digests(self) -> dict[str, str]:
+        """Return manifest hashes derived from these already-consumed bytes."""
+        digests = {
+            "duplicate_decisions_sha256": self.duplicate_decisions.sha256,
+            "editorial_overrides_sha256": self.editorial_overrides.sha256,
+            "oewn_archive_sha256": self.oewn_archive.sha256,
+            "provider_registry_sha256": self.provider_registry.sha256,
+            "sense_decisions_sha256": self.sense_decisions.sha256,
+        }
+        if self.fallback_cache is not None:
+            digests["fallback_cache_sha256"] = self.fallback_cache.sha256
+        return digests
+
+
+def _read_build_inputs(inputs: BuildInputs) -> BuildInputSnapshots:
+    required_paths = {
+        "source": inputs.source_path,
+        "duplicate decisions": inputs.duplicate_decisions_path,
+        "provider registry": inputs.provider_registry_path,
+        "OEWN archive": inputs.oewn_archive_path,
+        "sense decisions": inputs.sense_decisions_path,
+        "editorial overrides": inputs.editorial_overrides_path,
+    }
+    snapshots: dict[str, FileSnapshot] = {}
+    for label, path in required_paths.items():
+        try:
+            snapshots[label] = FileSnapshot.read(path)
+        except OSError as exc:
+            raise CorpusBuildError(
+                f"cannot read build input {label} at {path}: {exc}"
+            ) from exc
     try:
-        audit = audit_source(inputs.source_path, inputs.duplicate_decisions_path)
-        registry = load_provider_registry(inputs.provider_registry_path)
+        fallback_cache = (
+            FileSnapshot.read(inputs.fallback_cache_path)
+            if inputs.fallback_cache_path.exists()
+            else None
+        )
+    except OSError as exc:
+        raise CorpusBuildError(
+            f"cannot read fallback cache at {inputs.fallback_cache_path}: {exc}"
+        ) from exc
+    return BuildInputSnapshots(
+        source=snapshots["source"],
+        duplicate_decisions=snapshots["duplicate decisions"],
+        provider_registry=snapshots["provider registry"],
+        oewn_archive=snapshots["OEWN archive"],
+        sense_decisions=snapshots["sense decisions"],
+        editorial_overrides=snapshots["editorial overrides"],
+        fallback_cache=fallback_cache,
+    )
+
+
+def _load_build_context(inputs: BuildInputSnapshots) -> BuildContext:
+    try:
+        audit = audit_source_snapshots(inputs.source, inputs.duplicate_decisions)
+        registry = load_provider_registry_snapshot(inputs.provider_registry)
         oewn_config = registry["oewn-2025"]
         source_terms = {word.normalized_term for word in audit.words}
         candidates: dict[str, list[SenseCandidate]] = defaultdict(list)
-        for term, values in load_oewn_candidates(
-            inputs.oewn_archive_path,
+        for term, values in load_oewn_candidates_snapshot(
+            inputs.oewn_archive,
             oewn_config,
             source_terms,
         ).items():
             candidates[term].extend(values)
-        for term, values in load_cached_candidates(
-            inputs.fallback_cache_path,
+        for term, values in load_cached_candidates_snapshot(
+            inputs.fallback_cache,
             registry,
         ).items():
             if term not in source_terms:
@@ -86,12 +150,12 @@ def _load_build_context(inputs: BuildInputs) -> BuildContext:
     except (SourceAuditError, SnapshotError, KeyError) as exc:
         raise CorpusBuildError(str(exc)) from exc
 
-    selections = load_sense_decisions(
-        inputs.sense_decisions_path,
+    selections = load_sense_decisions_snapshot(
+        inputs.sense_decisions,
         source_digest=audit.source_digest,
     )
-    overrides = load_editorial_overrides(
-        inputs.editorial_overrides_path,
+    overrides = load_editorial_overrides_snapshot(
+        inputs.editorial_overrides,
         source_digest=audit.source_digest,
     )
     unknown_decisions = sorted((set(selections) | set(overrides)) - source_terms)
@@ -128,7 +192,7 @@ def _load_build_context(inputs: BuildInputs) -> BuildContext:
 
 def prepare_review_queue(inputs: BuildInputs, *, output_path: Path) -> dict[str, Any]:
     """Validate local inputs, generate the current queue, and replace it atomically."""
-    context = _load_build_context(inputs)
+    context = _load_build_context(_read_build_inputs(inputs))
     document = build_review_queue(
         context.audit,
         context.candidates,
@@ -137,28 +201,6 @@ def prepare_review_queue(inputs: BuildInputs, *, output_path: Path) -> dict[str,
     )
     write_review_queue(output_path, document)
     return document
-
-
-def _input_digests(inputs: BuildInputs) -> dict[str, str]:
-    paths = {
-        "source_sha256": inputs.source_path,
-        "duplicate_decisions_sha256": inputs.duplicate_decisions_path,
-        "editorial_overrides_sha256": inputs.editorial_overrides_path,
-        "oewn_archive_sha256": inputs.oewn_archive_path,
-        "provider_registry_sha256": inputs.provider_registry_path,
-        "sense_decisions_sha256": inputs.sense_decisions_path,
-    }
-    if inputs.fallback_cache_path.exists():
-        paths["fallback_cache_sha256"] = inputs.fallback_cache_path
-    values: dict[str, str] = {}
-    for label, path in paths.items():
-        try:
-            values[label] = sha256_file(path)
-        except OSError as exc:
-            raise CorpusBuildError(
-                f"cannot hash build input {label} at {path}: {exc}"
-            ) from exc
-    return values
 
 
 def build_manifest(
@@ -239,10 +281,8 @@ def build_artifacts(
     output_directory: Path,
 ) -> bool:
     """Build one immutable corpus release from checksum-verified local inputs."""
-    digests = _input_digests(inputs)
-    context = _load_build_context(inputs)
-    if context.audit.source_digest != digests["source_sha256"]:
-        raise CorpusBuildError("source digest changed before it was loaded")
+    snapshots = _read_build_inputs(inputs)
+    context = _load_build_context(snapshots)
     words = build_corpus_words(
         context.audit,
         context.candidates,
@@ -255,11 +295,7 @@ def build_artifacts(
         audit=context.audit,
         words=words,
         corpus_digest=sha256_bytes(corpus_content),
-        input_digests={
-            label: digest
-            for label, digest in digests.items()
-            if label != "source_sha256"
-        },
+        input_digests=snapshots.manifest_digests(),
     )
     return write_artifact_directory(
         output_directory,

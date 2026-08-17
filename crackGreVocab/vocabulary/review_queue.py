@@ -1,7 +1,5 @@
 """Deterministic review queue generation for unresolved corpus words."""
 
-import os
-import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -16,6 +14,7 @@ from .alignment import (
 )
 from .decisions import EditorialWord, ProviderWordDecision
 from .example_matching import EXAMPLE_MATCH_POLICY_RULE, EXAMPLE_MATCH_POLICY_VERSION
+from .files import atomic_replace_bytes
 from .normalization import canonical_json_bytes
 from .providers import SenseCandidate
 from .resolution import resolve_word
@@ -137,21 +136,4 @@ def build_review_queue(
 
 def write_review_queue(path: Path, document: dict[str, Any]) -> None:
     """Replace a generated queue atomically without touching reviewed decisions."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(descriptor, "wb") as output:
-            output.write(canonical_json_bytes(document))
-            output.flush()
-            os.fsync(output.fileno())
-        os.replace(temporary_name, path)
-    except BaseException:
-        try:
-            os.unlink(temporary_name)
-        except FileNotFoundError:
-            pass
-        raise
+    atomic_replace_bytes(path, canonical_json_bytes(document))

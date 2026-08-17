@@ -2,8 +2,9 @@
 
 import json
 import tempfile
-import zipfile
-from pathlib import Path
+from dataclasses import replace
+from pathlib import Path, PosixPath
+from typing import Any
 
 from django.test import SimpleTestCase
 from vocabulary.alignment import (
@@ -13,7 +14,7 @@ from vocabulary.alignment import (
     auto_select_senses,
 )
 from vocabulary.artifacts import load_corpus
-from vocabulary.builder import BuildInputs, build_artifacts
+from vocabulary.builder import build_artifacts
 from vocabulary.decisions import ProviderWordDecision, SenseSelection
 from vocabulary.example_matching import (
     EXAMPLE_MATCH_POLICY_RULE,
@@ -25,6 +26,55 @@ from vocabulary.providers import ProviderExample, SenseCandidate
 from vocabulary.resolution import resolve_word
 from vocabulary.review_queue import build_review_queue
 from vocabulary.source import SourceAudit, SourceRecord, SourceWord
+
+from tests.vocabulary_helpers import (
+    provider_registry_document,
+    write_minimal_build_inputs,
+)
+
+
+class _ReplaceAfterReadPath(PosixPath):
+    """Test filesystem boundary that changes a file after its first read."""
+
+    __slots__ = ("_did_replace", "_replacement_content")
+    _did_replace: bool
+    _replacement_content: bytes
+
+    def __new__(cls, path: Path, replacement_content: bytes):
+        instance = super().__new__(cls, path)
+        instance._did_replace = False
+        instance._replacement_content = replacement_content
+        return instance
+
+    def __init__(self, path: Path, replacement_content: bytes):
+        super().__init__(path)
+
+    def open(self, *args: Any, **kwargs: Any) -> Any:
+        opened = super().open(*args, **kwargs)
+        mode = args[0] if args else kwargs.get("mode", "r")
+        if self._did_replace or "r" not in mode:
+            return opened
+        self._did_replace = True
+        return _ReplaceOnClose(
+            opened,
+            Path(self),
+            self._replacement_content,
+        )
+
+
+class _ReplaceOnClose:
+    def __init__(self, opened: Any, path: Path, replacement_content: bytes):
+        self._opened = opened
+        self._path = path
+        self._replacement_content = replacement_content
+
+    def __enter__(self) -> Any:
+        return self._opened.__enter__()
+
+    def __exit__(self, *args: Any) -> Any:
+        result = self._opened.__exit__(*args)
+        self._path.write_bytes(self._replacement_content)
+        return result
 
 
 def _word(term: str, hint: str) -> SourceWord:
@@ -534,116 +584,55 @@ class AutomaticSenseSelectionTests(SimpleTestCase):
 
 
 class ArtifactBuildAcceptanceTests(SimpleTestCase):
+    def test_manifest_hashes_the_exact_provider_bytes_used_by_the_corpus(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            inputs = write_minimal_build_inputs(root)
+            initial_registry = inputs.provider_registry_path.read_bytes()
+            replacement_registry = json.dumps(
+                provider_registry_document(
+                    sha256_file(inputs.oewn_archive_path),
+                    oewn_archive_url="https://replacement.test/oewn.zip",
+                )
+            ).encode()
+            changing_registry = _ReplaceAfterReadPath(
+                inputs.provider_registry_path,
+                replacement_registry,
+            )
+
+            output = root / "release"
+            build_artifacts(
+                replace(inputs, provider_registry_path=changing_registry),
+                version="m1-test",
+                output_directory=output,
+            )
+
+            manifest = json.loads(
+                (output / "manifest.json").read_text(encoding="utf-8")
+            )
+            corpus = load_corpus(output / "manifest.json")
+            self.assertEqual(
+                manifest["inputs"]["provider_registry_sha256"],
+                sha256_bytes(initial_registry),
+            )
+            self.assertEqual(
+                corpus.words[0].senses[0].provenance["archive_url"],
+                "https://example.test/oewn.zip",
+            )
+
     def test_build_is_deterministic_idempotent_and_records_exact_manifest(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
+            inputs = write_minimal_build_inputs(root)
             paths = {
-                name: root / name
-                for name in (
-                    "source.csv",
-                    "duplicates.json",
-                    "providers.json",
-                    "oewn.zip",
-                    "senses.json",
-                    "overrides.json",
-                    "fallback.jsonl",
-                )
+                "source.csv": inputs.source_path,
+                "duplicates.json": inputs.duplicate_decisions_path,
+                "providers.json": inputs.provider_registry_path,
+                "oewn.zip": inputs.oewn_archive_path,
+                "senses.json": inputs.sense_decisions_path,
+                "overrides.json": inputs.editorial_overrides_path,
+                "fallback.jsonl": inputs.fallback_cache_path,
             }
-            paths["source.csv"].write_text(
-                "word,definition\nLucid,clear and easy to understand\n",
-                encoding="utf-8",
-            )
-            source_digest = sha256_file(paths["source.csv"])
-            paths["duplicates.json"].write_text(
-                json.dumps(
-                    {
-                        "collapse": [],
-                        "schema_version": 1,
-                        "source_sha256": source_digest,
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with zipfile.ZipFile(paths["oewn.zip"], "w") as archive:
-                archive.writestr(
-                    "entries-l.json",
-                    json.dumps(
-                        {
-                            "lucid": {
-                                "a": {
-                                    "sense": [
-                                        {
-                                            "id": "lucid%5:00",
-                                            "synset": "0001-a",
-                                        }
-                                    ]
-                                }
-                            }
-                        }
-                    ),
-                )
-                archive.writestr(
-                    "adj.test.json",
-                    json.dumps(
-                        {
-                            "0001-a": {
-                                "definition": ["clear and easy to understand"],
-                                "example": [
-                                    "A lucid explanation settled the question."
-                                ],
-                                "members": ["lucid"],
-                                "partOfSpeech": "adjective",
-                            }
-                        }
-                    ),
-                )
-            paths["providers.json"].write_text(
-                json.dumps(
-                    {
-                        "providers": {
-                            "dictionaryapi-dev-v2": {
-                                "base_url": "https://example.test/dictionary/",
-                                "minimum_interval_seconds": 1.0,
-                            },
-                            "freedictionaryapi-v1": {
-                                "base_url": "https://example.test/free/",
-                                "minimum_interval_seconds": 3.6,
-                                "rate_limit_per_hour": 1000,
-                            },
-                            "oewn-2025": {
-                                "archive_sha256": sha256_file(paths["oewn.zip"]),
-                                "archive_url": "https://example.test/oewn.zip",
-                            },
-                        },
-                        "schema_version": 2,
-                    }
-                ),
-                encoding="utf-8",
-            )
-            for name, collection in (
-                ("senses.json", "selections"),
-                ("overrides.json", "words"),
-            ):
-                paths[name].write_text(
-                    json.dumps(
-                        {
-                            collection: {},
-                            "schema_version": 4,
-                            "source_sha256": source_digest,
-                        }
-                    ),
-                    encoding="utf-8",
-                )
-
-            inputs = BuildInputs(
-                source_path=paths["source.csv"],
-                duplicate_decisions_path=paths["duplicates.json"],
-                provider_registry_path=paths["providers.json"],
-                oewn_archive_path=paths["oewn.zip"],
-                sense_decisions_path=paths["senses.json"],
-                editorial_overrides_path=paths["overrides.json"],
-                fallback_cache_path=paths["fallback.jsonl"],
-            )
             first_output = root / "first"
             second_output = root / "second"
 

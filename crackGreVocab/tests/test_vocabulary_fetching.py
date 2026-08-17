@@ -6,7 +6,7 @@ import json
 import tempfile
 from email.message import Message
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import unquote
 
 from django.test import SimpleTestCase
@@ -139,6 +139,61 @@ class FallbackFetchingTests(SimpleTestCase):
         self.assertEqual(first, (100, 500))
         self.assertEqual(second, (100, 400))
         self.assertEqual(len(cached), 200)
+
+    def test_interrupted_fetch_resumes_from_its_last_atomic_checkpoint(self):
+        requested_terms: list[str] = []
+
+        def interrupted_open(request, **_kwargs):
+            term = unquote(request.full_url.rsplit("/", 1)[-1]).casefold()
+            requested_terms.append(term)
+            if term == "beta":
+                raise URLError("connection lost")
+            return _Response(json.dumps(_free_dictionary_payload(request)).encode())
+
+        def recovered_open(request, **_kwargs):
+            term = unquote(request.full_url.rsplit("/", 1)[-1]).casefold()
+            requested_terms.append(term)
+            return _Response(json.dumps(_free_dictionary_payload(request)).encode())
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            cache = root / "fallback.jsonl"
+            clock = _Clock()
+            with self.assertRaisesRegex(
+                EnrichmentFetchError,
+                "request failed for term 'beta'",
+            ):
+                fetch_http_fallbacks(
+                    _config(),
+                    ["Alpha", "Beta", "Gamma"],
+                    cache,
+                    limit=3,
+                    checkpoint_every=1,
+                    open_url=interrupted_open,
+                    sleeper=clock.sleep,
+                    clock=clock,
+                    rate_state_path=root / "rate-limit",
+                    retries=0,
+                )
+
+            checkpoint = load_http_cache(cache)
+            resumed = fetch_http_fallbacks(
+                _config(),
+                ["Alpha", "Beta", "Gamma"],
+                cache,
+                limit=3,
+                checkpoint_every=1,
+                open_url=recovered_open,
+                sleeper=clock.sleep,
+                clock=clock,
+                rate_state_path=root / "rate-limit",
+            )
+            completed = load_http_cache(cache)
+
+        self.assertEqual(set(checkpoint), {("freedictionaryapi-v1", "alpha")})
+        self.assertEqual(resumed, (2, 0))
+        self.assertEqual(len(completed), 3)
+        self.assertEqual(requested_terms, ["alpha", "beta", "beta", "gamma"])
 
     def test_repeated_fetches_resume_and_share_persistent_pacing(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
