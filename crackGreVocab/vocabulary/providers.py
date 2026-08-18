@@ -1,31 +1,27 @@
 """Pinned offline provider snapshots and sense-preserving parsers."""
 
+import io
 import json
 import math
 import zipfile
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from .exceptions import SnapshotError
+from .files import FileSnapshot
 from .normalization import (
     canonical_json_bytes,
     canonical_prose,
     canonical_term,
     collapse_whitespace,
     sha256_bytes,
-    sha256_file,
 )
 
-PROVIDER_SCHEMA_VERSION = 1
-EXPECTED_PROVIDER_CONTRACTS = {
-    "dictionaryapi-dev-v2": ("http-json", 1, 3),
-    "freedictionaryapi-v1": ("http-json", 1, 2),
-    "oewn-2025": ("bulk-zip", 1, 1),
-}
+PROVIDER_SCHEMA_VERSION = 2
 HTTP_CACHE_FIELDS = {
     "http_status",
     "normalized_term",
@@ -39,7 +35,7 @@ HTTP_CACHE_FIELDS = {
 
 @dataclass(frozen=True)
 class ProviderConfig:
-    """One checked provider contract."""
+    """Fixed provider behavior combined with checked mutable pins."""
 
     id: str
     kind: str
@@ -162,29 +158,50 @@ class SenseCandidate:
         return sha256_bytes(canonical_json_bytes(self.as_review_dict()))
 
 
-def load_provider_registry(path: Path) -> dict[str, ProviderConfig]:
-    """Load the checked provider versions, URLs, checksums, and parser versions."""
+def load_provider_registry_snapshot(
+    snapshot: FileSnapshot,
+) -> dict[str, ProviderConfig]:
+    """Load mutable pins from exact bytes and combine them with provider behavior."""
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise SnapshotError(f"cannot read provider registry at {path}: {exc}") from exc
-    if not isinstance(document, dict) or document.get("schema_version") != 1:
-        raise SnapshotError("provider registry must use schema_version 1")
+        document = json.loads(snapshot.content)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise SnapshotError(
+            f"cannot read provider registry at {snapshot.path}: {exc}"
+        ) from exc
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"providers", "schema_version"}
+        or document.get("schema_version") != PROVIDER_SCHEMA_VERSION
+    ):
+        raise SnapshotError(
+            f"provider registry must use schema_version {PROVIDER_SCHEMA_VERSION}"
+        )
     providers = document.get("providers")
-    if not isinstance(providers, list) or not providers:
-        raise SnapshotError("provider registry must contain providers")
+    if not isinstance(providers, dict) or set(providers) != set(PROVIDER_SPECS):
+        raise SnapshotError("provider registry must pin every supported provider")
 
     result: dict[str, ProviderConfig] = {}
-    for item in providers:
+    for provider_id, spec in PROVIDER_SPECS.items():
+        item = providers[provider_id]
         if not isinstance(item, dict):
-            raise SnapshotError("each provider registry item must be an object")
+            raise SnapshotError(f"provider pins for {provider_id!r} must be an object")
+        expected_fields = (
+            {"archive_sha256", "archive_url"}
+            if spec.kind == "bulk-zip"
+            else {"base_url", "minimum_interval_seconds"}
+        )
+        allowed_fields = expected_fields | (
+            {"rate_limit_per_hour"} if spec.kind == "http-json" else set()
+        )
+        if not expected_fields <= set(item) or not set(item) <= allowed_fields:
+            raise SnapshotError(f"provider {provider_id!r} has invalid pin fields")
         try:
             config = ProviderConfig(
-                id=str(item["id"]),
-                kind=str(item["kind"]),
-                priority=int(item["priority"]),
-                parser_version=int(item["parser_version"]),
-                version=str(item.get("version", "")),
+                id=spec.id,
+                kind=spec.kind,
+                priority=spec.priority,
+                parser_version=spec.parser_version,
+                version=spec.version,
                 archive_url=str(item.get("archive_url", "")),
                 archive_sha256=str(item.get("archive_sha256", "")),
                 base_url=str(item.get("base_url", "")),
@@ -198,11 +215,9 @@ def load_provider_registry(path: Path) -> dict[str, ProviderConfig]:
                 ),
             )
         except (KeyError, TypeError, ValueError) as exc:
-            raise SnapshotError(f"invalid provider registry item: {item!r}") from exc
-        if config.id in result:
-            raise SnapshotError(f"duplicate provider id {config.id!r}")
-        if config.priority < 1:
-            raise SnapshotError(f"provider {config.id!r} priority must be positive")
+            raise SnapshotError(
+                f"invalid provider pins for {provider_id!r}: {item!r}"
+            ) from exc
         if not math.isfinite(config.minimum_interval_seconds):
             raise SnapshotError(
                 f"provider {config.id!r} request interval must be finite"
@@ -210,12 +225,6 @@ def load_provider_registry(path: Path) -> dict[str, ProviderConfig]:
         if config.rate_limit_per_hour is not None and config.rate_limit_per_hour < 1:
             raise SnapshotError(
                 f"provider {config.id!r} hourly rate limit must be positive"
-            )
-        expected_contract = EXPECTED_PROVIDER_CONTRACTS.get(config.id)
-        actual_contract = (config.kind, config.parser_version, config.priority)
-        if expected_contract != actual_contract:
-            raise SnapshotError(
-                f"unsupported provider contract {config.id}: {actual_contract}"
             )
         if config.kind == "bulk-zip" and (
             not config.archive_url or len(config.archive_sha256) != 64
@@ -238,6 +247,15 @@ def load_provider_registry(path: Path) -> dict[str, ProviderConfig]:
     return result
 
 
+def load_provider_registry(path: Path) -> dict[str, ProviderConfig]:
+    """Combine code-owned provider behavior with checked URLs and limits."""
+    try:
+        snapshot = FileSnapshot.read(path)
+    except OSError as exc:
+        raise SnapshotError(f"cannot read provider registry at {path}: {exc}") from exc
+    return load_provider_registry_snapshot(snapshot)
+
+
 def _json_object(content: bytes, *, label: str) -> dict[str, Any]:
     try:
         document = json.loads(content)
@@ -248,37 +266,33 @@ def _json_object(content: bytes, *, label: str) -> dict[str, Any]:
     return document
 
 
-def load_oewn_candidates(
-    archive_path: Path,
+def load_oewn_candidates_snapshot(
+    archive: FileSnapshot,
     config: ProviderConfig,
     normalized_terms: set[str],
 ) -> dict[str, tuple[SenseCandidate, ...]]:
-    """Read only requested lemmas from a checksum-pinned OEWN JSON archive."""
+    """Parse requested lemmas from exact checksum-pinned OEWN archive bytes."""
     if config.id != "oewn-2025" or config.kind != "bulk-zip":
         raise SnapshotError("OEWN parser received the wrong provider configuration")
-    try:
-        actual_digest = sha256_file(archive_path)
-    except OSError as exc:
-        raise SnapshotError(f"cannot read OEWN archive {archive_path}: {exc}") from exc
-    if actual_digest != config.archive_sha256:
+    if archive.sha256 != config.archive_sha256:
         raise SnapshotError(
             f"OEWN archive checksum mismatch: expected {config.archive_sha256}, "
-            f"got {actual_digest}"
+            f"got {archive.sha256}"
         )
 
     selected_entries: list[tuple[str, str, dict[str, Any]]] = []
     referenced_synsets: set[str] = set()
     try:
-        with zipfile.ZipFile(archive_path) as archive:
+        with zipfile.ZipFile(io.BytesIO(archive.content)) as archive_file:
             entry_names = sorted(
                 name
-                for name in archive.namelist()
+                for name in archive_file.namelist()
                 if name.startswith("entries-") and name.endswith(".json")
             )
             if not entry_names:
                 raise SnapshotError("OEWN archive has no entries-*.json files")
             for name in entry_names:
-                entries = _json_object(archive.read(name), label=f"OEWN {name}")
+                entries = _json_object(archive_file.read(name), label=f"OEWN {name}")
                 for lemma, entry in entries.items():
                     if not isinstance(lemma, str) or not isinstance(entry, dict):
                         raise SnapshotError(f"OEWN {name} contains an invalid entry")
@@ -306,19 +320,22 @@ def load_oewn_candidates(
             synsets: dict[str, dict[str, Any]] = {}
             synset_names = sorted(
                 name
-                for name in archive.namelist()
+                for name in archive_file.namelist()
                 if name.endswith(".json")
                 and name.startswith(("adj.", "adv.", "noun.", "verb."))
             )
             for name in synset_names:
-                document = _json_object(archive.read(name), label=f"OEWN {name}")
+                document = _json_object(
+                    archive_file.read(name),
+                    label=f"OEWN {name}",
+                )
                 for synset_id in referenced_synsets & document.keys():
                     value = document[synset_id]
                     if not isinstance(value, dict):
                         raise SnapshotError(f"OEWN synset {synset_id!r} is invalid")
                     synsets[synset_id] = value
     except (OSError, zipfile.BadZipFile, KeyError) as exc:
-        raise SnapshotError(f"cannot read OEWN archive {archive_path}: {exc}") from exc
+        raise SnapshotError(f"cannot read OEWN archive {archive.path}: {exc}") from exc
 
     missing_synsets = sorted(referenced_synsets - synsets.keys())
     if missing_synsets:
@@ -475,13 +492,28 @@ def load_oewn_candidates(
     }
 
 
-def load_http_cache(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
-    """Load deterministic, resumable raw HTTP response snapshots."""
-    if not path.exists():
+def load_oewn_candidates(
+    archive_path: Path,
+    config: ProviderConfig,
+    normalized_terms: set[str],
+) -> dict[str, tuple[SenseCandidate, ...]]:
+    """Read only requested lemmas from a checksum-pinned OEWN JSON archive."""
+    try:
+        archive = FileSnapshot.read(archive_path)
+    except OSError as exc:
+        raise SnapshotError(f"cannot read OEWN archive {archive_path}: {exc}") from exc
+    return load_oewn_candidates_snapshot(archive, config, normalized_terms)
+
+
+def load_http_cache_snapshot(
+    snapshot: FileSnapshot | None,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    """Load deterministic HTTP records from exact optional cache bytes."""
+    if snapshot is None:
         return {}
     records: dict[tuple[str, str], dict[str, Any]] = {}
     try:
-        with path.open("r", encoding="utf-8") as cache:
+        with io.StringIO(snapshot.content.decode("utf-8")) as cache:
             for line_number, line in enumerate(cache, start=1):
                 if not line.strip():
                     continue
@@ -544,9 +576,20 @@ def load_http_cache(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
                 records[key] = value
     except SnapshotError:
         raise
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise SnapshotError(f"cannot read HTTP cache {path}: {exc}") from exc
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise SnapshotError(f"cannot read HTTP cache {snapshot.path}: {exc}") from exc
     return records
+
+
+def load_http_cache(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
+    """Load deterministic, resumable raw HTTP response snapshots."""
+    if not path.exists():
+        return {}
+    try:
+        snapshot = FileSnapshot.read(path)
+    except OSError as exc:
+        raise SnapshotError(f"cannot read HTTP cache {path}: {exc}") from exc
+    return load_http_cache_snapshot(snapshot)
 
 
 def _walk_free_dictionary_senses(
@@ -798,13 +841,64 @@ def parse_dictionary_api_dev(
     return tuple(result)
 
 
-def load_cached_candidates(
-    cache_path: Path,
+CandidateParser = Callable[
+    [dict[str, Any], ProviderConfig],
+    tuple[SenseCandidate, ...],
+]
+
+
+@dataclass(frozen=True)
+class ProviderSpec:
+    """All code-owned behavior for one supported provider."""
+
+    id: str
+    kind: str
+    priority: int
+    parser_version: int
+    version: str = ""
+    candidate_parser: CandidateParser | None = None
+
+
+PROVIDER_SPECS = {
+    "oewn-2025": ProviderSpec("oewn-2025", "bulk-zip", 1, 1, "2025"),
+    "freedictionaryapi-v1": ProviderSpec(
+        "freedictionaryapi-v1",
+        "http-json",
+        2,
+        1,
+        candidate_parser=parse_free_dictionary_api,
+    ),
+    "dictionaryapi-dev-v2": ProviderSpec(
+        "dictionaryapi-dev-v2",
+        "http-json",
+        3,
+        1,
+        candidate_parser=parse_dictionary_api_dev,
+    ),
+}
+
+
+def parse_http_candidates(
+    record: dict[str, Any],
+    config: ProviderConfig,
+) -> tuple[SenseCandidate, ...]:
+    """Parse one checked HTTP response using its code-owned provider handler."""
+    try:
+        parser = PROVIDER_SPECS[config.id].candidate_parser
+    except KeyError as exc:
+        raise SnapshotError(f"no cached response parser for {config.id!r}") from exc
+    if parser is None:
+        raise SnapshotError(f"no cached response parser for {config.id!r}")
+    return parser(record, config)
+
+
+def load_cached_candidates_snapshot(
+    cache: FileSnapshot | None,
     registry: dict[str, ProviderConfig],
 ) -> dict[str, tuple[SenseCandidate, ...]]:
-    """Parse all checked HTTP snapshots through their pinned parser versions."""
+    """Parse exact checked HTTP cache bytes through pinned parser versions."""
     result: dict[str, list[SenseCandidate]] = defaultdict(list)
-    for (provider, normalized_term), record in load_http_cache(cache_path).items():
+    for (provider, normalized_term), record in load_http_cache_snapshot(cache).items():
         try:
             config = registry[provider]
         except KeyError as exc:
@@ -837,12 +931,7 @@ def load_cached_candidates(
         if record["status"] == "not-found":
             continue
         try:
-            if provider == "freedictionaryapi-v1":
-                candidates = parse_free_dictionary_api(record, config)
-            elif provider == "dictionaryapi-dev-v2":
-                candidates = parse_dictionary_api_dev(record, config)
-            else:
-                raise SnapshotError(f"no cached response parser for {provider!r}")
+            candidates = parse_http_candidates(record, config)
         except SnapshotError as exc:
             raise SnapshotError(
                 f"invalid cached response for provider {provider!r}, "
@@ -853,3 +942,18 @@ def load_cached_candidates(
         term: tuple(sorted(candidates, key=lambda candidate: candidate.selection_key))
         for term, candidates in result.items()
     }
+
+
+def load_cached_candidates(
+    cache_path: Path,
+    registry: dict[str, ProviderConfig],
+) -> dict[str, tuple[SenseCandidate, ...]]:
+    """Parse all checked HTTP snapshots through their pinned parser versions."""
+    if not cache_path.exists():
+        cache = None
+    else:
+        try:
+            cache = FileSnapshot.read(cache_path)
+        except OSError as exc:
+            raise SnapshotError(f"cannot read HTTP cache {cache_path}: {exc}") from exc
+    return load_cached_candidates_snapshot(cache, registry)

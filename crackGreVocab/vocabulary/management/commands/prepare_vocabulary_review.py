@@ -5,12 +5,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
-from vocabulary.builder import (
-    BuildInputs,
-    load_build_context,
-    review_queue_document,
-    write_review_queue,
-)
+from vocabulary.builder import BuildInputs, prepare_review_queue
 from vocabulary.exceptions import CorpusBuildError
 
 
@@ -38,16 +33,10 @@ class Command(BaseCommand):
             fallback_cache_path=options["fallback_cache"],
         )
         try:
-            audit, _registry, candidates, selections, overrides = load_build_context(
-                inputs
+            document = prepare_review_queue(
+                inputs,
+                output_path=options["output"],
             )
-            document = review_queue_document(
-                audit,
-                candidates,
-                selections,
-                overrides,
-            )
-            write_review_queue(options["output"], document)
         except CorpusBuildError as exc:
             raise CommandError(str(exc)) from exc
         self.stdout.write(

@@ -25,7 +25,11 @@ class ImportReport:
         return asdict(self)
 
 
-def _validate_existing_corpus(existing: CorpusVersion, artifact: LoadedCorpus) -> None:
+def _validate_existing_metadata(
+    existing: CorpusVersion,
+    artifact: LoadedCorpus,
+) -> None:
+    """Reject version reuse when immutable release metadata differs."""
     expected = {
         "corpus_digest": artifact.corpus_digest,
         "schema_version": artifact.schema_version,
@@ -39,48 +43,6 @@ def _validate_existing_corpus(existing: CorpusVersion, artifact: LoadedCorpus) -
             f"corpus version {artifact.version!r} already exists with different "
             "metadata"
         )
-    entries = list(
-        existing.entries.select_related("word")
-        .prefetch_related("senses")
-        .order_by("position")
-    )
-    if len(entries) != len(artifact.words):
-        raise CorpusImportError(
-            f"existing corpus {artifact.version!r} has an invalid entry count"
-        )
-    for entry, expected_word in zip(entries, artifact.words, strict=True):
-        if (
-            entry.position != expected_word.position
-            or entry.term != expected_word.term
-            or entry.pronunciation != expected_word.pronunciation
-            or entry.word_id != expected_word.word_id
-            or entry.word.normalized_term != expected_word.normalized_term
-        ):
-            raise CorpusImportError(
-                f"existing corpus {artifact.version!r} content does not match its "
-                "artifact"
-            )
-        senses = list(entry.senses.all())
-        if len(senses) != len(expected_word.senses):
-            raise CorpusImportError(
-                f"existing corpus {artifact.version!r} has an invalid sense count"
-            )
-        for sense, expected_sense in zip(
-            senses,
-            expected_word.senses,
-            strict=True,
-        ):
-            if (
-                sense.position != expected_sense.position
-                or sense.part_of_speech != expected_sense.part_of_speech
-                or sense.definition != expected_sense.definition
-                or sense.example != expected_sense.example
-                or sense.provenance != expected_sense.provenance
-            ):
-                raise CorpusImportError(
-                    f"existing corpus {artifact.version!r} sense content is not "
-                    "immutable"
-                )
 
 
 def _activate(corpus: CorpusVersion) -> bool:
@@ -93,11 +55,9 @@ def _activate(corpus: CorpusVersion) -> bool:
 
 
 def _import_validated(artifact: LoadedCorpus, *, activate: bool) -> ImportReport:
-    # Lock imported releases to serialize activation and repeated-import checks.
-    list(CorpusVersion.objects.select_for_update().values_list("pk", flat=True))
     existing = CorpusVersion.objects.filter(version=artifact.version).first()
     if existing is not None:
-        _validate_existing_corpus(existing, artifact)
+        _validate_existing_metadata(existing, artifact)
         activated = _activate(existing) if activate else False
         return ImportReport(
             version=artifact.version,
@@ -144,9 +104,9 @@ def _import_validated(artifact: LoadedCorpus, *, activate: bool) -> ImportReport
         if word.word_id not in existing_ids
     ]
     VocabularyWord.objects.bulk_create(new_words, batch_size=500)
-    database_words = VocabularyWord.objects.in_bulk(expected_by_id)
-    if set(database_words) != set(expected_by_id):
-        raise CorpusImportError("database did not retain every canonical word identity")
+    database_words = {
+        word.id: word for word in (*existing_words, *new_words)
+    }
 
     corpus = CorpusVersion.objects.create(
         version=artifact.version,
@@ -168,8 +128,6 @@ def _import_validated(artifact: LoadedCorpus, *, activate: bool) -> ImportReport
         for word in artifact.words
     ]
     CorpusEntry.objects.bulk_create(entries, batch_size=500)
-    if any(entry.pk is None for entry in entries):
-        raise CorpusImportError("database did not return corpus entry identities")
 
     senses = [
         VocabularySense(

@@ -5,7 +5,8 @@ import json
 import os
 import tempfile
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from datetime import UTC
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from .exceptions import EnrichmentFetchError, SnapshotError
+from .files import atomic_replace_bytes
 from .normalization import (
     canonical_json_bytes,
     canonical_term,
@@ -24,39 +26,17 @@ from .normalization import (
 from .providers import (
     ProviderConfig,
     load_http_cache,
-    parse_dictionary_api_dev,
-    parse_free_dictionary_api,
+    parse_http_candidates,
 )
 
 OpenUrl = Callable[..., Any]
-
-
-def _replace_bytes(path: Path, content: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(descriptor, "wb") as destination:
-            destination.write(content)
-            destination.flush()
-            os.fsync(destination.fileno())
-        os.replace(temporary_name, path)
-    except BaseException:
-        try:
-            os.unlink(temporary_name)
-        except FileNotFoundError:
-            pass
-        raise
 
 
 def download_pinned_archive(
     config: ProviderConfig,
     destination: Path,
     *,
-    open_url: OpenUrl = urlopen,
+    open_url: OpenUrl | None = None,
 ) -> bool:
     """Download one pinned bulk archive atomically; return whether it changed."""
     if config.kind != "bulk-zip":
@@ -76,7 +56,7 @@ def download_pinned_archive(
             headers={"User-Agent": "Crack-GRE-Vocab-corpus-builder/1"},
         )
         try:
-            response = open_url(request, timeout=120)
+            response = (open_url or urlopen)(request, timeout=120)
             with response, os.fdopen(descriptor, "wb") as output:
                 while chunk := response.read(1024 * 1024):
                     output.write(chunk)
@@ -129,7 +109,7 @@ def _request_json(
         try:
             response = open_url(request, timeout=30)
             with response:
-                status = int(getattr(response, "status", 200))
+                status = int(getattr(response, "status", None) or 200)
                 content = response.read()
         except HTTPError as exc:
             if exc.code == 404:
@@ -224,33 +204,47 @@ def _write_http_cache(
     records: dict[tuple[str, str], dict[str, Any]],
 ) -> None:
     content = b"".join(canonical_json_bytes(records[key]) for key in sorted(records))
-    _replace_bytes(path, content)
+    atomic_replace_bytes(path, content)
 
 
 def _checkpoint_http_cache(
     path: Path,
     records: dict[tuple[str, str], dict[str, Any]],
 ) -> None:
-    """Merge a process-local checkpoint without losing concurrent writes."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = path.with_name(f"{path.name}.lock")
+    """Replace the single writer's cache with its complete checkpoint."""
     try:
-        with lock_path.open("a+", encoding="utf-8") as lock:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            latest = load_http_cache(path)
-            for key, record in records.items():
-                latest.setdefault(key, record)
-            _write_http_cache(path, latest)
-            records.clear()
-            records.update(latest)
-            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-    except (OSError, SnapshotError) as exc:
+        _write_http_cache(path, records)
+    except OSError as exc:
         raise EnrichmentFetchError(
             f"cannot checkpoint fallback cache {path}: {exc}"
         ) from exc
 
 
-def fetch_http_fallbacks(
+@contextmanager
+def _exclusive_cache_writer(cache_path: Path) -> Iterator[None]:
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = cache_path.with_name(f"{cache_path.name}.lock")
+    try:
+        with lock_path.open("a+", encoding="utf-8") as lock:
+            try:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise EnrichmentFetchError(
+                    f"another fallback fetch owns cache {cache_path}"
+                ) from exc
+            try:
+                yield
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    except EnrichmentFetchError:
+        raise
+    except OSError as exc:
+        raise EnrichmentFetchError(
+            f"cannot lock fallback cache {cache_path}: {exc}"
+        ) from exc
+
+
+def _fetch_http_fallbacks_owned(
     config: ProviderConfig,
     terms: Iterable[str],
     cache_path: Path,
@@ -263,7 +257,6 @@ def fetch_http_fallbacks(
     rate_state_path: Path | None = None,
     retries: int = 2,
 ) -> tuple[int, int]:
-    """Fetch an explicit bounded set, preserving prior checkpoints on failure."""
     if config.kind != "http-json":
         raise EnrichmentFetchError(f"provider {config.id!r} is not an HTTP provider")
     if limit < 1:
@@ -342,14 +335,7 @@ def fetch_http_fallbacks(
         }
         if status == 200:
             try:
-                if config.id == "freedictionaryapi-v1":
-                    parse_free_dictionary_api(record, config)
-                elif config.id == "dictionaryapi-dev-v2":
-                    parse_dictionary_api_dev(record, config)
-                else:
-                    raise SnapshotError(
-                        f"no cached response parser for {config.id!r}"
-                    )
+                parse_http_candidates(record, config)
             except SnapshotError as exc:
                 raise EnrichmentFetchError(
                     f"provider {config.id!r} returned an invalid response for "
@@ -363,3 +349,32 @@ def fetch_http_fallbacks(
     if completed and completed % checkpoint_every:
         _checkpoint_http_cache(cache_path, records)
     return completed, len(all_missing) - completed
+
+
+def fetch_http_fallbacks(
+    config: ProviderConfig,
+    terms: Iterable[str],
+    cache_path: Path,
+    *,
+    limit: int,
+    checkpoint_every: int = 25,
+    open_url: OpenUrl | None = None,
+    sleeper: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.time,
+    rate_state_path: Path | None = None,
+    retries: int = 2,
+) -> tuple[int, int]:
+    """Fetch a bounded resumable batch while one command owns the cache."""
+    with _exclusive_cache_writer(cache_path):
+        return _fetch_http_fallbacks_owned(
+            config,
+            terms,
+            cache_path,
+            limit=limit,
+            checkpoint_every=checkpoint_every,
+            open_url=open_url or urlopen,
+            sleeper=sleeper,
+            clock=clock,
+            rate_state_path=rate_state_path,
+            retries=retries,
+        )

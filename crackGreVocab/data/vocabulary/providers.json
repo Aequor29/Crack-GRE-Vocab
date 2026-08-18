@@ -1,31 +1,18 @@
 {
-  "schema_version": 1,
-  "providers": [
-    {
+  "schema_version": 2,
+  "providers": {
+    "oewn-2025": {
       "archive_sha256": "7d749f6e2c39e6970e4997839dcf6e42fd281f3c2fae0171d2192bae8cfa4b51",
-      "archive_url": "https://en-word.net/downloads/english-wordnet-2025-json.zip",
-      "id": "oewn-2025",
-      "kind": "bulk-zip",
-      "parser_version": 1,
-      "priority": 1,
-      "version": "2025"
+      "archive_url": "https://en-word.net/downloads/english-wordnet-2025-json.zip"
     },
-    {
+    "freedictionaryapi-v1": {
       "base_url": "https://freedictionaryapi.com/api/v1/entries/en/",
-      "id": "freedictionaryapi-v1",
-      "kind": "http-json",
       "minimum_interval_seconds": 3.6,
-      "parser_version": 1,
-      "priority": 2,
       "rate_limit_per_hour": 1000
     },
-    {
+    "dictionaryapi-dev-v2": {
       "base_url": "https://api.dictionaryapi.dev/api/v2/entries/en/",
-      "id": "dictionaryapi-dev-v2",
-      "kind": "http-json",
-      "minimum_interval_seconds": 1.0,
-      "parser_version": 1,
-      "priority": 3
+      "minimum_interval_seconds": 1.0
     }
-  ]
+  }
 }

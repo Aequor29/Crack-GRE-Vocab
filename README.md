@@ -205,11 +205,11 @@ PostgreSQL tables. See the
 commands, review decisions and overrides, provider pacing, offline build,
 activation, and idempotent import behavior.
 
-The reviewed `m1-v1` release is checked in with 3,034 canonical words and 3,389
-paired definition/example senses. Its review queue is empty: 22 words use the
-narrow automatic policy, 2,399 use explicit provider-sense decisions, and 613
-use explicit editorial overrides. Builds and imports fail closed on changed or
-invalid input, and the application never depends on dictionary APIs at runtime.
+The reviewed `m1-v2` release is checked in with 3,034 canonical words and 3,389
+paired definition/example senses. Its review queue has no actionable items, and
+its learner-facing content is unchanged from `m1-v1`. Builds and imports fail
+closed on changed or invalid input, and the application never depends on
+dictionary APIs at runtime.
 
 Email verification delivery, Vercel, preview deployments, CI/CD, public domains,
 legacy migrations, and legacy authentication are intentionally out of scope

@@ -1,17 +1,17 @@
 """Bounded, resumable network acquisition tests without live HTTP."""
 
+import fcntl
 import io
 import json
 import tempfile
 from email.message import Message
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import unquote
 
 from django.test import SimpleTestCase
 from vocabulary.exceptions import EnrichmentFetchError
 from vocabulary.fetching import (
-    _checkpoint_http_cache,
     _request_json,
     fetch_http_fallbacks,
 )
@@ -80,40 +80,24 @@ def _free_dictionary_payload(request) -> dict[str, object]:
 
 
 class FallbackFetchingTests(SimpleTestCase):
-    def test_checkpoint_merges_records_written_by_another_process(self):
-        first_payload: dict[str, object] = {"entries": ["alpha"]}
-        second_payload: dict[str, object] = {"entries": ["beta"]}
-
-        def record(term: str, payload: dict[str, object]) -> dict[str, object]:
-            return {
-                "http_status": 200,
-                "normalized_term": term,
-                "payload": payload,
-                "payload_sha256": sha256_bytes(canonical_json_bytes(payload)),
-                "provider": "freedictionaryapi-v1",
-                "request_url": f"https://example.test/{term.title()}",
-                "status": "ok",
-            }
-
-        alpha = record("alpha", first_payload)
-        beta = record("beta", second_payload)
-        stale_process_records = {("freedictionaryapi-v1", "alpha"): alpha}
-
+    def test_a_second_writer_fails_without_touching_the_cache(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             cache = Path(temporary_directory) / "fallback.jsonl"
-            cache.write_bytes(canonical_json_bytes(beta))
+            lock_path = cache.with_name(f"{cache.name}.lock")
+            with lock_path.open("a+", encoding="utf-8") as owner:
+                fcntl.flock(owner.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with self.assertRaisesRegex(
+                    EnrichmentFetchError,
+                    "another fallback fetch owns cache",
+                ):
+                    fetch_http_fallbacks(
+                        _config(),
+                        ["Lucid"],
+                        cache,
+                        limit=1,
+                    )
 
-            _checkpoint_http_cache(cache, stale_process_records)
-            merged = load_http_cache(cache)
-
-        self.assertEqual(
-            set(merged),
-            {
-                ("freedictionaryapi-v1", "alpha"),
-                ("freedictionaryapi-v1", "beta"),
-            },
-        )
-        self.assertEqual(stale_process_records, merged)
+            self.assertFalse(cache.exists())
 
     def test_bounded_batch_reports_the_full_remaining_queue_and_resumes(self):
         terms = [
@@ -155,6 +139,61 @@ class FallbackFetchingTests(SimpleTestCase):
         self.assertEqual(first, (100, 500))
         self.assertEqual(second, (100, 400))
         self.assertEqual(len(cached), 200)
+
+    def test_interrupted_fetch_resumes_from_its_last_atomic_checkpoint(self):
+        requested_terms: list[str] = []
+
+        def interrupted_open(request, **_kwargs):
+            term = unquote(request.full_url.rsplit("/", 1)[-1]).casefold()
+            requested_terms.append(term)
+            if term == "beta":
+                raise URLError("connection lost")
+            return _Response(json.dumps(_free_dictionary_payload(request)).encode())
+
+        def recovered_open(request, **_kwargs):
+            term = unquote(request.full_url.rsplit("/", 1)[-1]).casefold()
+            requested_terms.append(term)
+            return _Response(json.dumps(_free_dictionary_payload(request)).encode())
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            cache = root / "fallback.jsonl"
+            clock = _Clock()
+            with self.assertRaisesRegex(
+                EnrichmentFetchError,
+                "request failed for term 'beta'",
+            ):
+                fetch_http_fallbacks(
+                    _config(),
+                    ["Alpha", "Beta", "Gamma"],
+                    cache,
+                    limit=3,
+                    checkpoint_every=1,
+                    open_url=interrupted_open,
+                    sleeper=clock.sleep,
+                    clock=clock,
+                    rate_state_path=root / "rate-limit",
+                    retries=0,
+                )
+
+            checkpoint = load_http_cache(cache)
+            resumed = fetch_http_fallbacks(
+                _config(),
+                ["Alpha", "Beta", "Gamma"],
+                cache,
+                limit=3,
+                checkpoint_every=1,
+                open_url=recovered_open,
+                sleeper=clock.sleep,
+                clock=clock,
+                rate_state_path=root / "rate-limit",
+            )
+            completed = load_http_cache(cache)
+
+        self.assertEqual(set(checkpoint), {("freedictionaryapi-v1", "alpha")})
+        self.assertEqual(resumed, (2, 0))
+        self.assertEqual(len(completed), 3)
+        self.assertEqual(requested_terms, ["alpha", "beta", "beta", "gamma"])
 
     def test_repeated_fetches_resume_and_share_persistent_pacing(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
