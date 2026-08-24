@@ -26,6 +26,11 @@ from .persistence import (
     persist_recall_answer_transition,
     persist_study_session_plan,
 )
+from .policy import (
+    MAX_NEW_WORDS_PER_SESSION,
+    MAX_STUDY_SESSION_ITEMS,
+    PLANNER_VERSION,
+)
 from .scheduling import SchedulingStateError, schedule_recall
 from .selectors import (
     DueItem,
@@ -38,11 +43,14 @@ from .selectors import (
     select_unseen_corpus_entries,
 )
 
-PLANNER_VERSION = "m1-due-first-v1"
-
 
 class StudyPlanningUnavailable(Exception):
     """The backend cannot form a useful Study Session from current state."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
 
 
 class StudyAnswerNotFound(Exception):
@@ -65,16 +73,8 @@ class StudyAnswerConflict(Exception):
         self.current_item_id = current_item_id
 
 
-class StudyAnswerUnavailable(Exception):
-    """Stored scheduling state cannot produce a safe Recall Outcome."""
-
-
-@dataclass(frozen=True)
-class StudyPlanPolicy:
-    """Versioned Milestone 1 boundaries for one bounded study sitting."""
-
-    max_items: int = 30
-    max_new_words: int = 20
+class StudyStateInvariantError(Exception):
+    """Persisted Study state violates a required scheduling invariant."""
 
 
 @dataclass(frozen=True)
@@ -95,54 +95,45 @@ class RecordedRecall:
     created: bool
 
 
-@dataclass(frozen=True)
-class SelectedStudyItems:
-    """The due and unseen vocabulary selected for a new study plan."""
-
-    due_items: tuple[DueItem, ...]
-    new_entries: tuple[CorpusEntry, ...]
-
-    def __bool__(self) -> bool:
-        return bool(self.due_items or self.new_entries)
-
-
-def _validate_new_word_target(
-    new_word_target: int,
-    policy: StudyPlanPolicy,
-) -> None:
-    if not 0 <= new_word_target <= policy.max_new_words:
+def _validate_new_word_target(new_word_target: int) -> None:
+    if not 0 <= new_word_target <= MAX_NEW_WORDS_PER_SESSION:
         raise ValueError(
-            f"new_word_target must be between 0 and {policy.max_new_words}."
+            f"new_word_target must be between 0 and {MAX_NEW_WORDS_PER_SESSION}."
         )
 
 
 def _require_active_corpus() -> CorpusVersion:
     corpus = get_active_corpus_version()
     if corpus is None:
-        raise StudyPlanningUnavailable("No active vocabulary corpus is available.")
+        raise StudyPlanningUnavailable(
+            "study_corpus_unavailable",
+            "No active vocabulary corpus is available.",
+        )
     return corpus
 
 
-def _select_session_items(
+def _select_due_and_new_items(
     *,
     learner: LearnerAccount,
     corpus: CorpusVersion,
     new_word_target: int,
-    policy: StudyPlanPolicy,
     planned_at: datetime,
-) -> SelectedStudyItems:
+) -> tuple[tuple[DueItem, ...], tuple[CorpusEntry, ...]]:
     due_items = select_due_study_items(
         learner=learner,
         corpus=corpus,
         planned_at=planned_at,
-        limit=policy.max_items,
+        limit=MAX_STUDY_SESSION_ITEMS,
     )
     new_entries = select_unseen_corpus_entries(
         learner=learner,
         corpus=corpus,
-        limit=min(new_word_target, policy.max_items - len(due_items)),
+        limit=min(
+            new_word_target,
+            MAX_STUDY_SESSION_ITEMS - len(due_items),
+        ),
     )
-    return SelectedStudyItems(due_items=due_items, new_entries=new_entries)
+    return due_items, new_entries
 
 
 def _validate_scheduling_snapshot(
@@ -152,19 +143,18 @@ def _validate_scheduling_snapshot(
 ) -> None:
     if item.kind == StudySessionItem.Kind.NEW:
         if state is not None:
-            raise StudyAnswerUnavailable(
+            raise StudyStateInvariantError(
                 "The new-item scheduling state is no longer eligible."
             )
         return
     if state is None:
-        raise StudyAnswerUnavailable("The due-item scheduling state is missing.")
+        raise StudyStateInvariantError("The due-item scheduling state is missing.")
     if (
         item.scheduler_version != state.scheduler_version
         or item.due_at_snapshot != state.next_due_at
-        or item.scheduling_state_snapshot.get("scheduler_state")
-        != state.scheduler_state
+        or item.scheduling_state_snapshot != state.scheduler_state
     ):
-        raise StudyAnswerUnavailable(
+        raise StudyStateInvariantError(
             "The due-item scheduling snapshot no longer matches current state."
         )
 
@@ -193,7 +183,7 @@ def _find_exact_recall_replay(
     try:
         outcome = existing.outcome
     except RecallOutcome.DoesNotExist as exc:
-        raise StudyAnswerUnavailable(
+        raise StudyStateInvariantError(
             "The accepted answer has no durable Recall Outcome."
         ) from exc
     return RecordedRecall(
@@ -249,7 +239,7 @@ def record_recall_answer(
 
     current_item = lock_current_session_item(session=session)
     if current_item is None:
-        raise StudyAnswerUnavailable(
+        raise StudyStateInvariantError(
             "The active Study Session has no unanswered current item."
         )
     if current_item.pk != item.pk:
@@ -273,7 +263,7 @@ def record_recall_answer(
             ),
         )
     except SchedulingStateError as exc:
-        raise StudyAnswerUnavailable(str(exc)) from exc
+        raise StudyStateInvariantError(str(exc)) from exc
 
     answer, outcome, _ = persist_recall_answer_transition(
         learner=locked_learner,
@@ -300,11 +290,10 @@ def plan_study_session(
     *,
     learner: LearnerAccount,
     new_word_target: int,
-    policy: StudyPlanPolicy = StudyPlanPolicy(),
     planned_at: datetime | None = None,
 ) -> PlannedSession:
     """Resume an active session or atomically persist a deterministic new plan."""
-    _validate_new_word_target(new_word_target, policy)
+    _validate_new_word_target(new_word_target)
     planned_at = planned_at or timezone.now()
     locked_learner = lock_learner(learner_id=learner.pk)
     active = get_active_study_session(learner=locked_learner)
@@ -312,24 +301,24 @@ def plan_study_session(
         return PlannedSession(session=active, created=False)
 
     corpus = _require_active_corpus()
-    selection = _select_session_items(
+    due_items, new_entries = _select_due_and_new_items(
         learner=locked_learner,
         corpus=corpus,
         new_word_target=new_word_target,
-        policy=policy,
         planned_at=planned_at,
     )
-    if not selection:
+    if not due_items and not new_entries:
         raise StudyPlanningUnavailable(
-            "No vocabulary items are eligible for a new Study Session."
+            "study_no_eligible_items",
+            "No vocabulary items are eligible for a new Study Session.",
         )
 
     session = persist_study_session_plan(
         learner=locked_learner,
         corpus=corpus,
         new_word_target=new_word_target,
-        due_items=selection.due_items,
-        new_entries=selection.new_entries,
+        due_items=due_items,
+        new_entries=new_entries,
         planner_version=PLANNER_VERSION,
     )
     return PlannedSession(

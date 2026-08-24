@@ -3,7 +3,6 @@
 import uuid
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
@@ -30,18 +29,6 @@ class LearnerWordState(models.Model):
         related_name="learner_states",
     )
     phase = models.CharField(max_length=16, choices=SchedulingPhase.choices)
-    difficulty = models.DecimalField(
-        max_digits=6,
-        decimal_places=3,
-        null=True,
-        blank=True,
-    )
-    stability = models.DecimalField(
-        max_digits=12,
-        decimal_places=6,
-        null=True,
-        blank=True,
-    )
     review_count = models.PositiveIntegerField()
     lapse_count = models.PositiveIntegerField(default=0)
     last_reviewed_at = models.DateTimeField()
@@ -77,14 +64,6 @@ class LearnerWordState(models.Model):
             models.CheckConstraint(
                 condition=Q(phase__in=SchedulingPhase.values),
                 name="study_word_state_phase_valid",
-            ),
-            models.CheckConstraint(
-                condition=Q(difficulty__isnull=True) | Q(difficulty__gt=0),
-                name="study_word_state_difficulty_positive",
-            ),
-            models.CheckConstraint(
-                condition=Q(stability__isnull=True) | Q(stability__gt=0),
-                name="study_word_state_stability_positive",
             ),
         )
         indexes = (
@@ -123,8 +102,6 @@ class StudySession(models.Model):
     )
     status = models.CharField(max_length=16, choices=Status.choices)
     new_word_target = models.PositiveSmallIntegerField()
-    planned_new_word_count = models.PositiveSmallIntegerField()
-    item_count = models.PositiveSmallIntegerField()
     planner_version = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -137,15 +114,6 @@ class StudySession(models.Model):
                 fields=("learner",),
                 condition=Q(status="active"),
                 name="study_one_active_session_per_learner",
-            ),
-            models.CheckConstraint(
-                condition=Q(planned_new_word_count__lte=F("new_word_target")),
-                name="study_session_new_count_within_target",
-            ),
-            models.CheckConstraint(
-                condition=Q(item_count__gte=F("planned_new_word_count"))
-                & Q(item_count__gte=1),
-                name="study_session_item_count_valid",
             ),
             models.CheckConstraint(
                 condition=~Q(planner_version=""),
@@ -204,8 +172,6 @@ class StudySessionItem(models.Model):
     due_at_snapshot = models.DateTimeField(null=True, blank=True)
     scheduler_version = models.CharField(max_length=64, blank=True)
     scheduling_state_snapshot = models.JSONField(default=dict)
-    presented_at = models.DateTimeField(null=True, blank=True)
-    revealed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -236,27 +202,7 @@ class StudySessionItem(models.Model):
                 ),
                 name="study_session_item_kind_snapshot_valid",
             ),
-            models.CheckConstraint(
-                condition=Q(revealed_at__isnull=True)
-                | (
-                    Q(presented_at__isnull=False)
-                    & Q(revealed_at__gte=F("presented_at"))
-                ),
-                name="study_session_item_reveal_order_valid",
-            ),
         )
-
-    def clean(self) -> None:
-        """Keep an item inside the corpus fixed by its owning session."""
-        super().clean()
-        if (
-            self.session_id
-            and self.corpus_entry_id
-            and self.session.corpus_id != self.corpus_entry.corpus_id
-        ):
-            raise ValidationError(
-                {"corpus_entry": "The item must belong to the session corpus."}
-            )
 
     def __str__(self) -> str:
         return f"{self.session_id} item {self.position}: {self.corpus_entry.term}"

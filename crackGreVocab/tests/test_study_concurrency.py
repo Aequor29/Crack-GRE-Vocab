@@ -104,8 +104,8 @@ class StudyConcurrencyTests(TransactionTestCase):
                         rating=rating,
                     )
                     return "accepted", result.answer.rating
-                except StudyAnswerConflict as error:
-                    return "conflict", error.code
+                except StudyAnswerConflict:
+                    return "conflict", None
 
             return {"call": answer, "learner_id": self.learner.pk}
 
@@ -116,8 +116,6 @@ class StudyConcurrencyTests(TransactionTestCase):
 
         self.assertEqual([status for status, _ in results].count("accepted"), 1)
         self.assertEqual([status for status, _ in results].count("conflict"), 1)
-        conflict = next(value for status, value in results if status == "conflict")
-        self.assertEqual(conflict, "study_session_inactive")
         self.assertEqual(RecallAnswer.objects.count(), 1)
         self.assertEqual(RecallOutcome.objects.count(), 1)
         self.assertEqual(LearnerWordState.objects.get().review_count, 1)

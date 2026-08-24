@@ -1,7 +1,7 @@
 """Deterministic Study domain fixtures."""
 
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from django.contrib.auth import get_user_model
 from vocabulary.models import (
@@ -27,6 +27,7 @@ def create_corpus(
     *,
     version: str = "study-test-v1",
     is_active: bool = True,
+    words_by_term: Mapping[str, VocabularyWord] | None = None,
 ) -> tuple[CorpusVersion, list[CorpusEntry]]:
     digest = hashlib.sha256(version.encode()).hexdigest()
     corpus = CorpusVersion.objects.create(
@@ -40,10 +41,12 @@ def create_corpus(
     )
     entries: list[CorpusEntry] = []
     for position, term in enumerate(terms, start=1):
-        word = VocabularyWord.objects.create(
-            term=term,
-            normalized_term=term.casefold(),
-        )
+        word = words_by_term.get(term) if words_by_term is not None else None
+        if word is None:
+            word = VocabularyWord.objects.create(
+                term=term,
+                normalized_term=term.casefold(),
+            )
         entry = CorpusEntry.objects.create(
             corpus=corpus,
             word=word,

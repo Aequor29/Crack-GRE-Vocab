@@ -3,7 +3,6 @@
 import uuid
 from datetime import timedelta
 
-from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
@@ -15,6 +14,7 @@ from study.models import (
     StudySession,
     StudySessionItem,
 )
+from study.persistence import persist_study_session_plan
 
 from .study_helpers import create_corpus, create_learner
 
@@ -28,15 +28,24 @@ class StudyDomainModelTests(TestCase):
     def create_session(self, **overrides) -> StudySession:
         values = {
             "corpus": self.corpus,
-            "item_count": 1,
             "learner": self.learner,
             "new_word_target": 1,
-            "planned_new_word_count": 1,
             "planner_version": "test-planner-v1",
             "status": StudySession.Status.ACTIVE,
         }
         values.update(overrides)
         return StudySession.objects.create(**values)
+
+    def test_schema_persists_only_current_study_behavior(self):
+        session_fields = {field.name for field in StudySession._meta.get_fields()}
+        item_fields = {field.name for field in StudySessionItem._meta.get_fields()}
+        state_fields = {field.name for field in LearnerWordState._meta.get_fields()}
+
+        self.assertFalse(
+            {"item_count", "planned_new_word_count"} & session_fields
+        )
+        self.assertFalse({"presented_at", "revealed_at"} & item_fields)
+        self.assertFalse({"difficulty", "stability"} & state_fields)
 
     def test_representative_history_lifecycle_is_durable_and_linked(self):
         state = LearnerWordState.objects.create(
@@ -51,7 +60,6 @@ class StudyDomainModelTests(TestCase):
         )
         session = self.create_session(
             new_word_target=0,
-            planned_new_word_count=0,
         )
         item = StudySessionItem.objects.create(
             session=session,
@@ -104,23 +112,37 @@ class StudyDomainModelTests(TestCase):
                 kind=StudySessionItem.Kind.NEW,
             )
 
-    def test_item_validation_rejects_cross_corpus_membership(self):
+    def test_plan_write_rejects_cross_corpus_membership_before_persisting(self):
         other_corpus, other_entries = create_corpus(
             ("opaque",),
             version="study-test-v2",
             is_active=False,
         )
         self.assertNotEqual(other_corpus, self.corpus)
-        item = StudySessionItem(
-            session=self.create_session(),
-            corpus_entry=other_entries[0],
-            position=1,
-            kind=StudySessionItem.Kind.NEW,
-        )
 
-        with self.assertRaises(ValidationError) as validation:
-            item.full_clean()
-        self.assertIn("corpus_entry", validation.exception.message_dict)
+        with self.assertRaisesMessage(ValueError, "session corpus"):
+            persist_study_session_plan(
+                learner=self.learner,
+                corpus=self.corpus,
+                new_word_target=1,
+                due_items=(),
+                new_entries=(other_entries[0],),
+                planner_version="test-planner-v1",
+            )
+        self.assertFalse(StudySession.objects.exists())
+
+    def test_failed_item_write_rolls_back_the_session(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            persist_study_session_plan(
+                learner=self.learner,
+                corpus=self.corpus,
+                new_word_target=2,
+                due_items=(),
+                new_entries=(self.entries[0], self.entries[0]),
+                planner_version="test-planner-v1",
+            )
+
+        self.assertFalse(StudySession.objects.exists())
 
     def test_constraints_reject_malformed_state_and_outcome_history(self):
         with self.assertRaises(IntegrityError), transaction.atomic():

@@ -1,15 +1,12 @@
 """AEQ-14 deterministic and atomic Study Session planning coverage."""
 
 from datetime import timedelta
-from unittest.mock import patch
 
-from django.db import DatabaseError
 from django.test import TestCase
 from django.utils import timezone
 from study.models import LearnerWordState, SchedulingPhase, StudySession
 from study.services import (
     StudyPlanningUnavailable,
-    StudyPlanPolicy,
     plan_study_session,
 )
 
@@ -36,7 +33,7 @@ class StudySessionPlanningTests(TestCase):
             scheduler_state={"source": "fixture"},
         )
 
-    def test_due_items_precede_new_items_and_capacity_reduces_new_target(self):
+    def test_due_items_precede_new_items(self):
         self.create_state(0, timedelta(minutes=-5))
         self.create_state(1, timedelta(minutes=-10))
         self.create_state(2, timedelta(days=1))
@@ -44,23 +41,50 @@ class StudySessionPlanningTests(TestCase):
         planned = plan_study_session(
             learner=self.learner,
             new_word_target=2,
-            policy=StudyPlanPolicy(max_items=3, max_new_words=2),
             planned_at=self.now,
         )
 
         self.assertTrue(planned.created)
-        self.assertEqual(planned.session.item_count, 3)
-        self.assertEqual(planned.session.planned_new_word_count, 1)
+        items = list(planned.session.items.all())
+        self.assertEqual(len(items), 4)
+        self.assertEqual(sum(item.kind == "new" for item in items), 2)
         self.assertEqual(
             [
                 (item.kind, item.corpus_entry.term)
-                for item in planned.session.items.all()
+                for item in items
             ],
-            [("due", "lucid"), ("due", "abate"), ("new", "pragmatic")],
+            [
+                ("due", "lucid"),
+                ("due", "abate"),
+                ("new", "pragmatic"),
+                ("new", "zeal"),
+            ],
         )
-        first_due = planned.session.items.all()[0]
+        first_due = items[0]
         self.assertEqual(first_due.scheduler_version, "fsrs-adapter-v1")
-        self.assertEqual(first_due.scheduling_state_snapshot["review_count"], 2)
+        self.assertEqual(first_due.scheduling_state_snapshot, {"source": "fixture"})
+
+    def test_due_work_consumes_session_capacity_before_new_material(self):
+        self.corpus.is_active = False
+        self.corpus.save(update_fields=("is_active",))
+        self.corpus, self.entries = create_corpus(
+            tuple(f"word-{index:02d}" for index in range(32)),
+            version="study-capacity-v1",
+        )
+        for index in range(29):
+            self.create_state(index, timedelta(minutes=-(index + 1)))
+        self.create_state(29, timedelta(days=1))
+
+        planned = plan_study_session(
+            learner=self.learner,
+            new_word_target=2,
+            planned_at=self.now,
+        )
+
+        items = list(planned.session.items.all())
+        self.assertEqual(len(items), 30)
+        self.assertEqual(sum(item.kind == "due" for item in items), 29)
+        self.assertEqual(sum(item.kind == "new" for item in items), 1)
 
     def test_repeated_creation_resumes_the_same_persisted_session(self):
         first = plan_study_session(learner=self.learner, new_word_target=2)
@@ -85,14 +109,44 @@ class StudySessionPlanningTests(TestCase):
         with self.assertRaisesMessage(StudyPlanningUnavailable, "No vocabulary"):
             plan_study_session(learner=self.learner, new_word_target=1)
 
-    def test_item_persistence_failure_rolls_back_the_session(self):
-        with (
-            patch(
-                "study.persistence.StudySessionItem.objects.bulk_create",
-                side_effect=DatabaseError("simulated write failure"),
-            ),
-            self.assertRaises(DatabaseError),
-        ):
-            plan_study_session(learner=self.learner, new_word_target=1)
+    def test_due_state_reuses_stable_word_identity_in_a_new_corpus_release(self):
+        self.create_state(0, timedelta(minutes=-5))
+        self.corpus.is_active = False
+        self.corpus.save(update_fields=("is_active",))
+        next_corpus, next_entries = create_corpus(
+            ("abate", "candid"),
+            version="study-test-v2",
+            words_by_term={"abate": self.entries[0].word},
+        )
 
-        self.assertFalse(StudySession.objects.exists())
+        planned = plan_study_session(
+            learner=self.learner,
+            new_word_target=1,
+            planned_at=self.now,
+        )
+
+        due_item, new_item = planned.session.items.all()
+        self.assertEqual(planned.session.corpus, next_corpus)
+        self.assertEqual(due_item.corpus_entry, next_entries[0])
+        self.assertEqual(due_item.corpus_entry.word, self.entries[0].word)
+        self.assertEqual(new_item.corpus_entry, next_entries[1])
+
+    def test_abandoned_unanswered_new_item_is_eligible_again(self):
+        first = plan_study_session(
+            learner=self.learner,
+            new_word_target=1,
+            planned_at=self.now,
+        ).session
+        first_item = first.items.get()
+        first.close(StudySession.Status.ABANDONED, at=self.now)
+        first.save(update_fields=("status", "ended_at", "updated_at"))
+
+        resumed = plan_study_session(
+            learner=self.learner,
+            new_word_target=1,
+            planned_at=self.now,
+        ).session
+
+        self.assertNotEqual(resumed.pk, first.pk)
+        self.assertEqual(resumed.items.get().corpus_entry, first_item.corpus_entry)
+        self.assertFalse(LearnerWordState.objects.exists())

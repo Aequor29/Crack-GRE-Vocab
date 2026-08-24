@@ -217,7 +217,7 @@ export interface StudyAnswerResponse {
 }
 
 export interface StudyPlanningError {
-  code?: string;
+  code: string;
   detail: string;
   /** @format uuid */
   current_item_id?: string;
@@ -251,15 +251,9 @@ export interface StudySession {
    * @max 32767
    */
   new_word_target: number;
-  /**
-   * @min 0
-   * @max 32767
-   */
+  /** Derive how many persisted items introduce new Words. */
   planned_new_word_count: number;
-  /**
-   * @min 0
-   * @max 32767
-   */
+  /** Derive total progress from the persisted session items. */
   item_count: number;
   /** @maxLength 64 */
   planner_version: string;
@@ -296,6 +290,7 @@ export interface StudySessionItem {
 }
 
 export interface StudyValidationError {
+  code: string;
   detail?: string;
   client_request_id?: string[];
   new_word_target?: string[];

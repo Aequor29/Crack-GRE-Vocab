@@ -1,7 +1,9 @@
 """Authenticated Study Session creation and resume API coverage."""
 
 import json
+from unittest.mock import patch
 
+from django.db import IntegrityError, OperationalError
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
@@ -62,6 +64,7 @@ class StudySessionApiTests(TestCase):
     def test_auth_csrf_validation_and_empty_plan_fail_safely(self):
         anonymous = self.post_session(1)
         self.assertEqual(anonymous.status_code, 403)
+        self.assertEqual(anonymous.json()["code"], "authentication_required")
 
         self.client.force_login(self.learner)
         missing_csrf = self.client.post(
@@ -72,17 +75,63 @@ class StudySessionApiTests(TestCase):
         )
         invalid_target = self.post_session(21)
         self.assertEqual(missing_csrf.status_code, 403)
+        self.assertEqual(missing_csrf.json()["code"], "csrf_failed")
         self.assertEqual(invalid_target.status_code, 400)
+        self.assertEqual(invalid_target.json()["code"], "validation_error")
 
-        self.assertEqual(
-            self.client.get(reverse("study:active-session")).status_code,
-            404,
-        )
+        missing_session = self.client.get(reverse("study:active-session"))
+        self.assertEqual(missing_session.status_code, 404)
+        self.assertEqual(missing_session.json()["code"], "study_session_not_found")
         self.corpus.is_active = False
         self.corpus.save(update_fields=("is_active",))
         unavailable = self.post_session(1)
         self.assertEqual(unavailable.status_code, 409)
         self.assertEqual(
             unavailable.json(),
-            {"detail": "No active vocabulary corpus is available."},
+            {
+                "code": "study_corpus_unavailable",
+                "detail": "No active vocabulary corpus is available.",
+            },
         )
+
+    def test_only_transient_database_failures_are_retryable(self):
+        self.client.force_login(self.learner)
+        with patch(
+            "study.views.plan_study_session",
+            side_effect=OperationalError("connection interrupted"),
+        ):
+            retryable = self.post_session(1)
+
+        self.assertEqual(retryable.status_code, 503)
+        self.assertEqual(
+            retryable.json(),
+            {
+                "code": "study_temporarily_unavailable",
+                "detail": "The Study Session could not be persisted.",
+                "retryable": True,
+            },
+        )
+
+        with patch(
+            "study.views.get_active_study_session",
+            side_effect=OperationalError("connection interrupted"),
+        ):
+            restore_retryable = self.client.get(reverse("study:active-session"))
+        self.assertEqual(restore_retryable.status_code, 503)
+        self.assertEqual(
+            restore_retryable.json(),
+            {
+                "code": "study_temporarily_unavailable",
+                "detail": "The Study Session could not be loaded.",
+                "retryable": True,
+            },
+        )
+
+        with (
+            patch(
+                "study.views.plan_study_session",
+                side_effect=IntegrityError("unexpected invariant failure"),
+            ),
+            self.assertRaises(IntegrityError),
+        ):
+            self.post_session(1)

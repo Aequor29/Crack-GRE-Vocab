@@ -2,9 +2,8 @@
 
 import uuid
 from datetime import timedelta
-from unittest.mock import patch
 
-from django.db import DatabaseError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 from study.models import (
@@ -13,7 +12,8 @@ from study.models import (
     RecallOutcome,
     StudySession,
 )
-from study.scheduling import schedule_recall
+from study.persistence import persist_recall_answer_transition
+from study.scheduling import SchedulerTransition, schedule_recall
 from study.services import (
     StudyAnswerConflict,
     StudyAnswerNotFound,
@@ -138,8 +138,6 @@ class RecallAnswerServiceTests(TestCase):
             corpus=self.corpus,
             status=StudySession.Status.ACTIVE,
             new_word_target=1,
-            planned_new_word_count=1,
-            item_count=1,
             planner_version="test",
         )
         with self.assertRaises(StudyAnswerNotFound):
@@ -151,7 +149,7 @@ class RecallAnswerServiceTests(TestCase):
                 rating="remembered",
             )
 
-    def test_future_item_and_persistence_failure_leave_no_partial_transition(self):
+    def test_future_item_conflict_leaves_durable_state_unchanged(self):
         session = self.plan()
         first_item, second_item = session.items.all()
 
@@ -166,19 +164,31 @@ class RecallAnswerServiceTests(TestCase):
         self.assertEqual(out_of_order.exception.code, "study_item_out_of_order")
         self.assertEqual(out_of_order.exception.current_item_id, first_item.pk)
 
-        with (
-            patch(
-                "study.services.persist_recall_answer_transition",
-                side_effect=DatabaseError("simulated persistence failure"),
-            ),
-            self.assertRaises(DatabaseError),
-        ):
-            record_recall_answer(
+        session.refresh_from_db()
+        self.assertEqual(session.status, StudySession.Status.ACTIVE)
+        self.assertFalse(RecallAnswer.objects.exists())
+        self.assertFalse(RecallOutcome.objects.exists())
+        self.assertFalse(LearnerWordState.objects.exists())
+
+    def test_failed_outcome_write_rolls_back_the_partial_transition(self):
+        session = self.plan(target=1)
+        item = session.items.get()
+        invalid_transition = SchedulerTransition(
+            scheduler_version="test-scheduler",
+            next_phase="learning",
+            next_due_at=self.now + timedelta(minutes=10),
+            next_state={},
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            persist_recall_answer_transition(
                 learner=self.learner,
-                session_id=session.pk,
-                item_id=first_item.pk,
-                request_id=uuid.uuid4(),
+                item=item,
+                state=None,
                 rating="remembered",
+                request_id=uuid.uuid4(),
+                occurred_at=self.now,
+                transition=invalid_transition,
             )
 
         session.refresh_from_db()
@@ -186,6 +196,40 @@ class RecallAnswerServiceTests(TestCase):
         self.assertFalse(RecallAnswer.objects.exists())
         self.assertFalse(RecallOutcome.objects.exists())
         self.assertFalse(LearnerWordState.objects.exists())
+
+    def test_new_and_learning_failures_do_not_increment_lapses(self):
+        initial_at = self.now - timedelta(minutes=2)
+        session = self.plan(target=1)
+        item = session.items.get()
+        record_recall_answer(
+            learner=self.learner,
+            session_id=session.pk,
+            item_id=item.pk,
+            request_id=uuid.uuid4(),
+            rating="forgot",
+            occurred_at=initial_at,
+        )
+        state = LearnerWordState.objects.get()
+        self.assertEqual(state.phase, "learning")
+        self.assertEqual(state.lapse_count, 0)
+
+        learning_session = plan_study_session(
+            learner=self.learner,
+            new_word_target=0,
+            planned_at=state.next_due_at,
+        ).session
+        record_recall_answer(
+            learner=self.learner,
+            session_id=learning_session.pk,
+            item_id=learning_session.items.get().pk,
+            request_id=uuid.uuid4(),
+            rating="forgot",
+            occurred_at=state.next_due_at,
+        )
+
+        state.refresh_from_db()
+        self.assertEqual(state.phase, "learning")
+        self.assertEqual(state.lapse_count, 0)
 
     def test_due_review_failure_snapshots_state_and_increments_lapse(self):
         first_review_at = self.now - timedelta(days=2, minutes=10)
@@ -207,8 +251,6 @@ class RecallAnswerServiceTests(TestCase):
             learner=self.learner,
             word=self.entries[0].word,
             phase=review.next_phase,
-            difficulty=review.difficulty,
-            stability=review.stability,
             review_count=2,
             last_reviewed_at=first.next_due_at,
             next_due_at=review.next_due_at,
