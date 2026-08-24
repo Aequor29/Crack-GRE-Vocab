@@ -135,11 +135,12 @@ pending link and requires the learner's current password before attaching the
 Google identity. A different Google subject already associated with that email
 is an explicit conflict.
 
-Google sign-in stays disabled when both credential settings are empty. For
-local testing, create fresh Web OAuth credentials and configure the exact
-callback shown in `crackGreVocab/.env.example`; never reuse prototype OAuth
-credentials. Non-debug hosting requires explicit hosted callback and frontend
-URLs.
+Google sign-in may stay disabled locally when both credential settings are
+empty; starting the flow then returns an explicit unavailable status to the
+local frontend. For local provider testing, create fresh Web OAuth credentials
+and configure the exact callback shown in `crackGreVocab/.env.example`; never
+reuse prototype OAuth credentials. Non-debug hosting fails fast unless Google
+credentials and explicit HTTPS callback and frontend URLs are configured.
 
 ## Quality checks
 

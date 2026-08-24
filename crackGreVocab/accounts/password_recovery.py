@@ -75,7 +75,7 @@ def deliver_password_reset_if_recoverable(email: str) -> None:
 
     try:
         send_password_reset_email(account)
-    except Exception:
+    except OSError:
         logger.exception(
             "Password reset delivery failed.",
             extra={"learner_account_id": account.pk},

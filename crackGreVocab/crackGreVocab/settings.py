@@ -170,6 +170,10 @@ if bool(GOOGLE_OAUTH_CLIENT_ID) != bool(GOOGLE_OAUTH_CLIENT_SECRET):
         "together."
     )
 GOOGLE_OAUTH_ENABLED = bool(GOOGLE_OAUTH_CLIENT_ID)
+if not DEBUG and not GOOGLE_OAUTH_ENABLED:
+    raise ImproperlyConfigured(
+        "Google OAuth credentials must be configured when DEBUG is false."
+    )
 if GOOGLE_OAUTH_ENABLED:
     GOOGLE_OAUTH_CALLBACK_URL = http_url(
         "GOOGLE_OAUTH_CALLBACK_URL",
@@ -190,13 +194,9 @@ if GOOGLE_OAUTH_ENABLED:
         )
 else:
     GOOGLE_OAUTH_CALLBACK_URL = ""
-    GOOGLE_OAUTH_FRONTEND_ORIGIN = (
-        http_url(
-            "GOOGLE_OAUTH_FRONTEND_ORIGIN",
-            default="http://localhost:3000",
-        )
-        if DEBUG or optional_env_string("GOOGLE_OAUTH_FRONTEND_ORIGIN")
-        else ""
+    GOOGLE_OAUTH_FRONTEND_ORIGIN = http_url(
+        "GOOGLE_OAUTH_FRONTEND_ORIGIN",
+        default="http://localhost:3000",
     )
 GOOGLE_OAUTH_PENDING_LINK_MAX_AGE = 10 * 60
 

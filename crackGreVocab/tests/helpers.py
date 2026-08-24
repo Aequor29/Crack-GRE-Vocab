@@ -14,6 +14,12 @@ BASE_SETTINGS_ENVIRONMENT = {
     "DEBUG": "false",
     "DEFAULT_FROM_EMAIL": "Crack GRE Vocab <no-reply@example.com>",
     "EMAIL_BACKEND": "django.core.mail.backends.console.EmailBackend",
+    "GOOGLE_OAUTH_CALLBACK_URL": (
+        "https://api.example.com/api/auth/google/callback/"
+    ),
+    "GOOGLE_OAUTH_CLIENT_ID": "hosted-client-id",
+    "GOOGLE_OAUTH_CLIENT_SECRET": "hosted-client-secret",
+    "GOOGLE_OAUTH_FRONTEND_ORIGIN": "https://app.example.com",
     "PASSWORD_RESET_FRONTEND_URL": "https://app.example.com/reset-password/confirm",
     "SECURE_HSTS_INCLUDE_SUBDOMAINS": "false",
     "SECRET_KEY": "test-only-secret",

@@ -90,8 +90,7 @@ class SignUpView(AccountApiView):
     )
     def post(self, request: Request) -> Response:
         serializer = SignUpSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         account = serializer.save()
         login(
@@ -125,8 +124,7 @@ class SignInView(AccountApiView):
     )
     def post(self, request: Request) -> Response:
         serializer = SignInSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         account = authenticate(
             request=request._request,
@@ -162,8 +160,7 @@ class PasswordResetRequestView(AccountApiView):
     )
     def post(self, request: Request) -> Response:
         serializer = PasswordResetStartSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         deliver_password_reset_if_recoverable(serializer.validated_data["email"])
 
@@ -197,8 +194,7 @@ class PasswordResetConfirmView(AccountApiView):
     )
     def post(self, request: Request) -> Response:
         serializer = PasswordResetConfirmSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         try:
             reset_learner_password(**serializer.validated_data)

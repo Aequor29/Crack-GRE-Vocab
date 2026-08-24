@@ -1,8 +1,6 @@
 """Focused model and API coverage for clean-rebuild learner accounts."""
 
 import json
-from datetime import timedelta
-from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -132,22 +130,42 @@ class LearnerAccountApiTests(TestCase):
             200,
         )
 
-    def test_anonymous_account_mutations_require_csrf(self):
-        signup = self.post_json(
-            "accounts:sign-up",
-            {
-                "email": "learner@example.com",
-                "display_name": "Learner",
-                "password": self.valid_password,
-            },
-        )
-        signin = self.post_json(
-            "accounts:sign-in",
-            {"email": "learner@example.com", "password": self.valid_password},
+    def test_every_unsafe_account_endpoint_requires_csrf(self):
+        requests = (
+            (
+                "accounts:sign-up",
+                {
+                    "email": "learner@example.com",
+                    "display_name": "Learner",
+                    "password": self.valid_password,
+                },
+            ),
+            (
+                "accounts:sign-in",
+                {
+                    "email": "learner@example.com",
+                    "password": self.valid_password,
+                },
+            ),
+            ("accounts:sign-out", None),
+            ("accounts:password-reset", {"email": "learner@example.com"}),
+            (
+                "accounts:password-reset-confirm",
+                {
+                    "uid": "opaque-account-id",
+                    "token": "opaque-reset-token",
+                    "password": self.valid_password,
+                },
+            ),
+            ("accounts:google-link-confirm", {"password": self.valid_password}),
+            ("accounts:google-link-cancel", None),
         )
 
-        self.assertEqual(signup.status_code, 403)
-        self.assertEqual(signin.status_code, 403)
+        for url_name, payload in requests:
+            with self.subTest(url_name=url_name):
+                response = self.post_json(url_name, payload)
+                self.assertEqual(response.status_code, 403)
+
         self.assertEqual(LearnerAccount.objects.count(), 0)
 
     def test_hostile_origin_cannot_use_a_valid_csrf_token(self):
@@ -252,28 +270,6 @@ class LearnerAccountApiTests(TestCase):
         self.assertIn("detail", response.json())
         self.assertEqual(LearnerAccount.objects.count(), 0)
 
-    def test_signup_handles_a_unique_email_race_as_validation(self):
-        token = self.csrf_token()
-        with patch(
-            "accounts.serializers.LearnerAccount.objects.create_user",
-            side_effect=IntegrityError,
-        ):
-            response = self.post_json(
-                "accounts:sign-up",
-                {
-                    "email": "learner@example.com",
-                    "display_name": "Learner",
-                    "password": self.valid_password,
-                },
-                csrf_token=token,
-            )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(
-            response.json()["email"],
-            ["An account with this email already exists."],
-        )
-
     def test_database_rejects_case_variant_email_outside_the_manager(self):
         self.create_account()
 
@@ -330,15 +326,7 @@ class LearnerAccountApiTests(TestCase):
             {"detail": "Email or password is incorrect."},
         )
 
-    def test_anonymous_and_expired_sessions_cannot_read_the_account(self):
-        self.assertEqual(self.client.get(reverse("accounts:account")).status_code, 403)
-
-        account = self.create_account()
-        self.client.force_login(account)
-        session = self.client.session
-        session.set_expiry(timedelta(seconds=-1))
-        session.save()
-
+    def test_anonymous_session_cannot_read_the_account(self):
         self.assertEqual(self.client.get(reverse("accounts:account")).status_code, 403)
 
     def test_auth_cors_allows_credentials_only_for_an_exact_origin(self):

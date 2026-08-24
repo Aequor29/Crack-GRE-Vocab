@@ -40,7 +40,10 @@ class SettingsBootTests(TestCase):
     def test_google_credentials_must_be_configured_as_a_pair(self):
         result = run_settings_script(
             BOOT_SCRIPT,
-            overrides={"GOOGLE_OAUTH_CLIENT_ID": "client-id-only"},
+            overrides={
+                "GOOGLE_OAUTH_CLIENT_ID": "client-id-only",
+                "GOOGLE_OAUTH_CLIENT_SECRET": "",
+            },
         )
 
         self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -54,6 +57,7 @@ class SettingsBootTests(TestCase):
         result = run_settings_script(
             BOOT_SCRIPT,
             overrides={
+                "GOOGLE_OAUTH_CALLBACK_URL": "",
                 "GOOGLE_OAUTH_CLIENT_ID": "fresh-client-id",
                 "GOOGLE_OAUTH_CLIENT_SECRET": "fresh-client-secret",
             },
@@ -79,3 +83,16 @@ class SettingsBootTests(TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("ImproperlyConfigured", result.stderr)
         self.assertIn("must use HTTPS", result.stderr)
+
+    def test_hosted_google_oauth_cannot_be_disabled(self):
+        result = run_settings_script(
+            BOOT_SCRIPT,
+            overrides={
+                "GOOGLE_OAUTH_CLIENT_ID": "",
+                "GOOGLE_OAUTH_CLIENT_SECRET": "",
+            },
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ImproperlyConfigured", result.stderr)
+        self.assertIn("must be configured when DEBUG is false", result.stderr)

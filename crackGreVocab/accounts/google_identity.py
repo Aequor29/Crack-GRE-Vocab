@@ -9,16 +9,7 @@ from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 
 from .managers import LearnerAccountManager
-from .models import LearnerAccount
-from .persistence import (
-    create_google_identity,
-    create_google_only_learner,
-    lock_learner_account_by_email,
-)
-from .selectors import (
-    get_google_identity_by_subject,
-    learner_account_has_google_identity,
-)
+from .models import GoogleIdentity, LearnerAccount
 
 
 class InvalidGoogleClaims(ValueError):
@@ -34,9 +25,8 @@ class GoogleIdentityConflict(ValueError):
 
 
 class GoogleSignInAction(StrEnum):
-    """Describe the safe next action for one verified Google identity."""
+    """Describe a Google sign-in that cannot establish a learner session."""
 
-    SIGN_IN = "sign-in"
     REQUIRE_PASSWORD_CONFIRMATION = "require-password-confirmation"
     CONFLICT = "conflict"
 
@@ -51,11 +41,21 @@ class VerifiedGoogleClaims:
 
 
 @dataclass(frozen=True, slots=True)
-class GoogleSignInResolution:
-    """Return either a signed-in account or an explicit next action."""
+class GoogleSignInSuccess:
+    """Carry the learner required by every successful Google sign-in."""
 
-    action: GoogleSignInAction
-    account: LearnerAccount | None = None
+    account: LearnerAccount
+
+
+type GoogleSignInResolution = GoogleSignInSuccess | GoogleSignInAction
+
+
+@dataclass(frozen=True, slots=True)
+class PendingGoogleLink:
+    """Carry only the validated identity needed for password confirmation."""
+
+    subject: str
+    email: str
 
 
 def parse_verified_google_claims(userinfo: Any) -> VerifiedGoogleClaims:
@@ -99,68 +99,78 @@ def resolve_google_sign_in(
     claims: VerifiedGoogleClaims,
 ) -> GoogleSignInResolution:
     """Resolve a returning subject, new account, or confirmed-link requirement."""
-    linked_identity = get_google_identity_by_subject(claims.subject)
+    linked_identity = (
+        GoogleIdentity.objects.select_related("account")
+        .filter(subject=claims.subject)
+        .first()
+    )
     if linked_identity is not None:
         if not linked_identity.account.is_active:
-            return GoogleSignInResolution(GoogleSignInAction.CONFLICT)
-        return GoogleSignInResolution(
-            GoogleSignInAction.SIGN_IN,
-            linked_identity.account,
-        )
+            return GoogleSignInAction.CONFLICT
+        return GoogleSignInSuccess(linked_identity.account)
 
-    account = lock_learner_account_by_email(claims.email)
+    account = (
+        LearnerAccount.objects.select_for_update()
+        .filter(email=claims.email)
+        .first()
+    )
     if account is not None:
-        has_google_identity = learner_account_has_google_identity(account)
+        has_google_identity = GoogleIdentity.objects.filter(account=account).exists()
         if (
             has_google_identity
             or not account.has_usable_password()
             or not account.is_active
         ):
-            return GoogleSignInResolution(GoogleSignInAction.CONFLICT)
-        return GoogleSignInResolution(
-            GoogleSignInAction.REQUIRE_PASSWORD_CONFIRMATION
-        )
+            return GoogleSignInAction.CONFLICT
+        return GoogleSignInAction.REQUIRE_PASSWORD_CONFIRMATION
 
-    account = create_google_only_learner(
+    account = LearnerAccount.objects.create_user(
         email=claims.email,
         display_name=claims.display_name,
+        password=None,
     )
     try:
-        create_google_identity(
+        GoogleIdentity.objects.create(
             account=account,
             subject=claims.subject,
-            verified_email=claims.email,
+            email_at_link=claims.email,
         )
     except IntegrityError as exc:
         raise GoogleIdentityConflict from exc
-    return GoogleSignInResolution(GoogleSignInAction.SIGN_IN, account)
+    return GoogleSignInSuccess(account)
 
 
 @transaction.atomic
 def confirm_google_link_with_password(
-    claims: VerifiedGoogleClaims,
+    pending_link: PendingGoogleLink,
     password: str,
 ) -> LearnerAccount:
     """Link one pending Google subject after password-account ownership proof."""
-    account = lock_learner_account_by_email(claims.email)
+    account = (
+        LearnerAccount.objects.select_for_update()
+        .filter(email=pending_link.email)
+        .first()
+    )
     if account is None or not account.is_active or not account.has_usable_password():
         raise GoogleLinkAuthenticationFailed
     if not account.check_password(password):
         raise GoogleLinkAuthenticationFailed
 
-    subject_identity = get_google_identity_by_subject(claims.subject)
+    subject_identity = GoogleIdentity.objects.filter(
+        subject=pending_link.subject
+    ).first()
     if subject_identity is not None:
         if subject_identity.account_id == account.pk:
             return account
         raise GoogleIdentityConflict
-    if learner_account_has_google_identity(account):
+    if GoogleIdentity.objects.filter(account=account).exists():
         raise GoogleIdentityConflict
 
     try:
-        create_google_identity(
+        GoogleIdentity.objects.create(
             account=account,
-            subject=claims.subject,
-            verified_email=claims.email,
+            subject=pending_link.subject,
+            email_at_link=pending_link.email,
         )
     except IntegrityError as exc:
         raise GoogleIdentityConflict from exc
