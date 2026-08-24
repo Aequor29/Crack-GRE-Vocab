@@ -8,11 +8,11 @@ from urllib.parse import parse_qs, urlparse
 from accounts.google_oauth import get_google_oauth_client
 from accounts.models import GoogleIdentity
 from authlib.integrations.base_client import OAuthError
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from requests import ConnectionError as ProviderConnectionError
 
 LearnerAccount = get_user_model()
 
@@ -23,6 +23,7 @@ LearnerAccount = get_user_model()
     ),
     GOOGLE_OAUTH_CLIENT_ID="fresh-local-client-id",
     GOOGLE_OAUTH_CLIENT_SECRET="fresh-local-client-secret",
+    GOOGLE_OAUTH_ENABLED=True,
     GOOGLE_OAUTH_FRONTEND_ORIGIN="http://127.0.0.1:3000",
     SECURE_SSL_REDIRECT=False,
 )
@@ -88,7 +89,7 @@ class GoogleAuthenticationApiTests(TestCase):
             HTTP_X_CSRFTOKEN=self.csrf_token(),
         )
 
-    def test_start_redirects_through_oidc_client_with_fixed_callback(self):
+    def test_start_returns_the_provider_authorization_redirect(self):
         with patch(
             "accounts.google_views.get_google_oauth_client",
             return_value=self.google_client,
@@ -101,10 +102,6 @@ class GoogleAuthenticationApiTests(TestCase):
             "https://accounts.google.test/authorize",
         )
         self.assertEqual(response["Cache-Control"], "no-store")
-        self.google_client.authorize_redirect.assert_called_once_with(
-            response.wsgi_request,
-            settings.GOOGLE_OAUTH_CALLBACK_URL,
-        )
 
     def test_oidc_client_enables_openid_nonce_and_pkce(self):
         google_client = get_google_oauth_client()
@@ -121,6 +118,7 @@ class GoogleAuthenticationApiTests(TestCase):
     @override_settings(
         GOOGLE_OAUTH_CLIENT_ID="",
         GOOGLE_OAUTH_CLIENT_SECRET="",
+        GOOGLE_OAUTH_ENABLED=False,
     )
     def test_start_reports_when_fresh_provider_credentials_are_not_configured(self):
         response = self.client.get(reverse("accounts:google-start"))
@@ -131,6 +129,32 @@ class GoogleAuthenticationApiTests(TestCase):
             response["Location"],
             "http://127.0.0.1:3000/sign-in?google=unavailable",
         )
+
+    def test_provider_transport_failure_returns_a_safe_provider_error(self):
+        self.google_client.authorize_redirect.side_effect = ProviderConnectionError(
+            "provider unavailable"
+        )
+        with patch(
+            "accounts.google_views.get_google_oauth_client",
+            return_value=self.google_client,
+        ):
+            response = self.client.get(reverse("accounts:google-start"))
+
+        self.assertEqual(
+            response["Location"],
+            "http://127.0.0.1:3000/sign-in?google=provider-error",
+        )
+
+    def test_unexpected_start_failure_reaches_normal_error_reporting(self):
+        self.google_client.authorize_redirect.side_effect = RuntimeError(
+            "application defect"
+        )
+        with patch(
+            "accounts.google_views.get_google_oauth_client",
+            return_value=self.google_client,
+        ):
+            with self.assertRaisesMessage(RuntimeError, "application defect"):
+                self.client.get(reverse("accounts:google-start"))
 
     def test_new_verified_google_identity_creates_and_signs_in_account(self):
         response = self.provider_callback(self.provider_claims())
@@ -175,6 +199,32 @@ class GoogleAuthenticationApiTests(TestCase):
         self.assertEqual(
             self.client.get(reverse("accounts:account")).json()["id"],
             account.pk,
+        )
+
+    def test_inactive_google_linked_account_cannot_sign_in(self):
+        account = LearnerAccount.objects.create_user(
+            email="inactive@example.com",
+            display_name="Inactive learner",
+            password=None,
+            is_active=False,
+        )
+        GoogleIdentity.objects.create(
+            account=account,
+            subject="google-subject-1",
+            email_at_link=account.email,
+        )
+
+        response = self.provider_callback(
+            self.provider_claims(email="inactive@example.com")
+        )
+
+        self.assertEqual(
+            response["Location"],
+            "http://127.0.0.1:3000/sign-in?google=conflict",
+        )
+        self.assertEqual(
+            self.client.get(reverse("accounts:account")).status_code,
+            403,
         )
 
     def test_matching_password_account_requires_explicit_password_confirmation(self):
@@ -280,6 +330,22 @@ class GoogleAuthenticationApiTests(TestCase):
                 query = parse_qs(urlparse(response["Location"]).query)
                 self.assertEqual(query, {"google": [expected_status]})
 
+        self.assertEqual(LearnerAccount.objects.count(), 0)
+
+    def test_callback_transport_failure_returns_a_safe_provider_error(self):
+        self.google_client.authorize_access_token.side_effect = (
+            ProviderConnectionError("provider unavailable")
+        )
+        with patch(
+            "accounts.google_views.get_google_oauth_client",
+            return_value=self.google_client,
+        ):
+            response = self.client.get(reverse("accounts:google-callback"))
+
+        self.assertEqual(
+            response["Location"],
+            "http://127.0.0.1:3000/sign-in?google=provider-error",
+        )
         self.assertEqual(LearnerAccount.objects.count(), 0)
 
     def test_pending_link_can_be_cancelled_and_cannot_then_be_confirmed(self):

@@ -27,9 +27,10 @@ class PasswordRecoveryApiTests(TestCase):
     def setUp(self) -> None:
         self.client = Client(enforce_csrf_checks=True)
 
-    def csrf_token(self) -> str:
+    def csrf_token(self, client: Client | None = None) -> str:
         """Return a masked CSRF token from the public auth endpoint."""
-        response = self.client.get(
+        active_client = client or self.client
+        response = active_client.get(
             reverse("accounts:csrf"),
             HTTP_ORIGIN=self.origin,
         )
@@ -68,19 +69,49 @@ class PasswordRecoveryApiTests(TestCase):
             HTTP_X_CSRFTOKEN=self.csrf_token(),
         )
 
+    def sign_in(self, client: Client, password: str) -> None:
+        """Establish a learner session through the public sign-in endpoint."""
+        response = client.post(
+            reverse("accounts:sign-in"),
+            data=json.dumps(
+                {"email": "learner@example.com", "password": password}
+            ),
+            content_type="application/json",
+            HTTP_ORIGIN=self.origin,
+            HTTP_X_CSRFTOKEN=self.csrf_token(client),
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_request_is_non_enumerating_and_emails_only_recoverable_account(self):
         LearnerAccount.objects.create_user(
             email="learner@example.com",
             display_name="Learner",
             password=self.original_password,
         )
+        LearnerAccount.objects.create_user(
+            email="inactive@example.com",
+            display_name="Inactive learner",
+            password=self.original_password,
+            is_active=False,
+        )
+        LearnerAccount.objects.create_user(
+            email="google-only@example.com",
+            display_name="Google-only learner",
+            password=None,
+        )
 
         known_response = self.request_password_reset("LEARNER@example.com")
         unknown_response = self.request_password_reset("unknown@example.com")
+        inactive_response = self.request_password_reset("inactive@example.com")
+        unusable_password_response = self.request_password_reset(
+            "google-only@example.com"
+        )
 
         self.assertEqual(known_response.status_code, 202)
         self.assertEqual(unknown_response.status_code, 202)
         self.assertEqual(known_response.json(), unknown_response.json())
+        self.assertEqual(known_response.json(), inactive_response.json())
+        self.assertEqual(known_response.json(), unusable_password_response.json())
         self.assertEqual(
             known_response.json(),
             {
@@ -111,7 +142,7 @@ class PasswordRecoveryApiTests(TestCase):
         with self.assertLogs("accounts.password_recovery", level="ERROR") as logs:
             with patch(
                 "accounts.password_recovery.send_mail",
-                side_effect=RuntimeError("mail sink unavailable"),
+                side_effect=OSError("mail sink unavailable"),
             ):
                 known_response = self.request_password_reset("learner@example.com")
         unknown_response = self.request_password_reset("unknown@example.com")
@@ -119,6 +150,20 @@ class PasswordRecoveryApiTests(TestCase):
         self.assertEqual(known_response.status_code, 202)
         self.assertEqual(known_response.json(), unknown_response.json())
         self.assertIn("Password reset delivery failed", logs.output[0])
+
+    def test_unexpected_delivery_defect_reaches_normal_error_reporting(self):
+        LearnerAccount.objects.create_user(
+            email="learner@example.com",
+            display_name="Learner",
+            password=self.original_password,
+        )
+
+        with patch(
+            "accounts.password_recovery.send_mail",
+            side_effect=RuntimeError("application defect"),
+        ):
+            with self.assertRaisesMessage(RuntimeError, "application defect"):
+                self.request_password_reset("learner@example.com")
 
     def test_valid_confirmation_changes_password_once(self):
         LearnerAccount.objects.create_user(
@@ -209,15 +254,15 @@ class PasswordRecoveryApiTests(TestCase):
         )
 
     def test_successful_reset_invalidates_every_existing_session(self):
-        account = LearnerAccount.objects.create_user(
+        LearnerAccount.objects.create_user(
             email="learner@example.com",
             display_name="Learner",
             password=self.original_password,
         )
         first_session = Client(enforce_csrf_checks=True)
         second_session = Client(enforce_csrf_checks=True)
-        first_session.force_login(account)
-        second_session.force_login(account)
+        self.sign_in(first_session, self.original_password)
+        self.sign_in(second_session, self.original_password)
         self.assertEqual(
             first_session.get(reverse("accounts:account")).status_code,
             200,

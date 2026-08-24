@@ -1,6 +1,5 @@
 """HTTP boundaries for Google sign-in and confirmed account linking."""
 
-import logging
 from urllib.parse import urlencode
 
 from authlib.integrations.base_client import OAuthError
@@ -10,6 +9,8 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.utils import timezone
 from django.views import View
 from drf_spectacular.utils import extend_schema
+from joserfc.errors import JoseError
+from requests import RequestException
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -25,7 +26,9 @@ from .google_identity import (
     GoogleIdentityConflict,
     GoogleLinkAuthenticationFailed,
     GoogleSignInAction,
+    GoogleSignInSuccess,
     InvalidGoogleClaims,
+    PendingGoogleLink,
     VerifiedGoogleClaims,
     confirm_google_link_with_password,
     parse_verified_google_claims,
@@ -39,7 +42,6 @@ from .serializers import (
 )
 from .views import CSRF_HEADER_PARAMETER, AccountApiView
 
-logger = logging.getLogger(__name__)
 PENDING_GOOGLE_LINK_SESSION_KEY = "pending_google_link"
 
 
@@ -57,11 +59,9 @@ def _store_pending_google_link(
     claims: VerifiedGoogleClaims,
 ) -> None:
     request.session[PENDING_GOOGLE_LINK_SESSION_KEY] = {
-        "display_name": claims.display_name,
         "email": claims.email,
-        "email_verified": True,
         "issued_at": int(timezone.now().timestamp()),
-        "sub": claims.subject,
+        "subject": claims.subject,
     }
 
 
@@ -69,13 +69,21 @@ def _clear_pending_google_link(request: HttpRequest) -> None:
     request.session.pop(PENDING_GOOGLE_LINK_SESSION_KEY, None)
 
 
-def _read_pending_google_link(request: HttpRequest) -> VerifiedGoogleClaims:
+def _read_pending_google_link(request: HttpRequest) -> PendingGoogleLink:
     pending = request.session.get(PENDING_GOOGLE_LINK_SESSION_KEY)
     if not isinstance(pending, dict):
         raise InvalidGoogleClaims
 
     issued_at = pending.get("issued_at")
-    if not isinstance(issued_at, int):
+    subject = pending.get("subject")
+    email = pending.get("email")
+    if (
+        not isinstance(issued_at, int)
+        or not isinstance(subject, str)
+        or not subject
+        or not isinstance(email, str)
+        or not email
+    ):
         _clear_pending_google_link(request)
         raise InvalidGoogleClaims
     age_seconds = int(timezone.now().timestamp()) - issued_at
@@ -83,7 +91,7 @@ def _read_pending_google_link(request: HttpRequest) -> VerifiedGoogleClaims:
         _clear_pending_google_link(request)
         raise InvalidGoogleClaims
 
-    return parse_verified_google_claims(pending)
+    return PendingGoogleLink(subject=subject, email=email)
 
 
 class GoogleSignInStartView(View):
@@ -104,8 +112,7 @@ class GoogleSignInStartView(View):
             return response
         except GoogleOAuthUnavailable:
             return _google_frontend_redirect("/sign-in", "unavailable")
-        except Exception:
-            logger.exception("Google sign-in could not be started.")
+        except (JoseError, OAuthError, RequestException):
             return _google_frontend_redirect("/sign-in", "provider-error")
 
 
@@ -128,29 +135,26 @@ class GoogleSignInCallbackView(View):
             return _google_frontend_redirect("/sign-in", status_name)
         except GoogleOAuthUnavailable:
             return _google_frontend_redirect("/sign-in", "unavailable")
+        except (JoseError, RequestException):
+            return _google_frontend_redirect("/sign-in", "provider-error")
         except (InvalidGoogleClaims, GoogleIdentityConflict):
             return _google_frontend_redirect("/sign-in", "provider-error")
-        except Exception:
-            logger.exception("Google sign-in callback failed.")
-            return _google_frontend_redirect("/sign-in", "provider-error")
 
-        if resolution.action is GoogleSignInAction.CONFLICT:
+        if isinstance(resolution, GoogleSignInSuccess):
+            _clear_pending_google_link(request)
+            login(
+                request,
+                resolution.account,
+                backend="django.contrib.auth.backends.ModelBackend",
+            )
+            return _google_frontend_redirect("/account", "connected")
+
+        if resolution is GoogleSignInAction.CONFLICT:
             _clear_pending_google_link(request)
             return _google_frontend_redirect("/sign-in", "conflict")
-        if resolution.action is GoogleSignInAction.REQUIRE_PASSWORD_CONFIRMATION:
-            _store_pending_google_link(request, claims)
-            return _google_frontend_redirect("/sign-in", "link-required")
 
-        if resolution.account is None:
-            logger.error("Google sign-in resolved without a learner account.")
-            return _google_frontend_redirect("/sign-in", "provider-error")
-        _clear_pending_google_link(request)
-        login(
-            request,
-            resolution.account,
-            backend="django.contrib.auth.backends.ModelBackend",
-        )
-        return _google_frontend_redirect("/account", "connected")
+        _store_pending_google_link(request, claims)
+        return _google_frontend_redirect("/sign-in", "link-required")
 
 
 class GoogleLinkConfirmView(AccountApiView):
@@ -175,13 +179,12 @@ class GoogleLinkConfirmView(AccountApiView):
     def post(self, request: Request) -> Response:
         """Confirm the pending link and establish the learner session."""
         serializer = GoogleLinkConfirmSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         try:
-            claims = _read_pending_google_link(request._request)
+            pending_link = _read_pending_google_link(request._request)
             account = confirm_google_link_with_password(
-                claims,
+                pending_link,
                 serializer.validated_data["password"],
             )
         except InvalidGoogleClaims:

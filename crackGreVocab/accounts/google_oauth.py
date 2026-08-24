@@ -14,7 +14,7 @@ class GoogleOAuthUnavailable(RuntimeError):
 
 def get_google_oauth_client():
     """Return a Google OIDC client that verifies state, nonce, and ID tokens."""
-    if not settings.GOOGLE_OAUTH_CLIENT_ID or not settings.GOOGLE_OAUTH_CLIENT_SECRET:
+    if not settings.GOOGLE_OAUTH_ENABLED:
         raise GoogleOAuthUnavailable
 
     oauth_registry = OAuth()
