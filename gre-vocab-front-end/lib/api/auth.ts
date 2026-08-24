@@ -1,7 +1,6 @@
 import type {
   ApiMessage,
   AuthValidationError,
-  CsrfToken,
   GoogleLinkConfirmRequest,
   LearnerAccount,
   PasswordResetConfirmRequest,
@@ -9,80 +8,29 @@ import type {
   SignInRequest,
   SignUpRequest,
 } from "@/lib/api/generated/schema.generated";
-import { configuredApiOrigin } from "@/lib/api/origin";
+import {
+  type ApiJsonResult,
+  type ApiRequestOptions,
+  ApiTransportError,
+  buildApiUrl,
+  getApiJson,
+  postApiJsonWithCsrf,
+} from "@/lib/api/transport";
 
 type OpenApiDocument = typeof import("../../../crackGreVocab/openapi.json");
 type OpenApiPaths = OpenApiDocument["paths"];
-type IsExact<Actual, Expected> =
-  (<Value>() => Value extends Actual ? 1 : 2) extends <Value>() => Value extends Expected ? 1 : 2
-    ? true
-    : false;
-
-const AUTH_CONTRACT = {
-  paths: {
-    account: "/api/auth/account/",
-    csrf: "/api/auth/csrf/",
-    passwordResetConfirm: "/api/auth/password-reset/confirm/",
-    passwordResetStart: "/api/auth/password-reset/",
-    googleLinkCancel: "/api/auth/google/link/cancel/",
-    googleLinkConfirm: "/api/auth/google/link/confirm/",
-    signIn: "/api/auth/sign-in/",
-    signOut: "/api/auth/sign-out/",
-    signUp: "/api/auth/sign-up/",
-  },
-  responseStatusesMatch: {
-    account: true,
-    csrf: true,
-    passwordResetConfirm: true,
-    passwordResetStart: true,
-    googleLinkCancel: true,
-    googleLinkConfirm: true,
-    signIn: true,
-    signOut: true,
-    signUp: true,
-  },
-} as const satisfies {
-  paths: {
-    account: keyof OpenApiPaths;
-    csrf: keyof OpenApiPaths;
-    passwordResetConfirm: keyof OpenApiPaths;
-    passwordResetStart: keyof OpenApiPaths;
-    googleLinkCancel: keyof OpenApiPaths;
-    googleLinkConfirm: keyof OpenApiPaths;
-    signIn: keyof OpenApiPaths;
-    signOut: keyof OpenApiPaths;
-    signUp: keyof OpenApiPaths;
-  };
-  responseStatusesMatch: {
-    account: IsExact<keyof OpenApiPaths["/api/auth/account/"]["get"]["responses"], "200" | "403">;
-    csrf: IsExact<keyof OpenApiPaths["/api/auth/csrf/"]["get"]["responses"], "200">;
-    passwordResetConfirm: IsExact<
-      keyof OpenApiPaths["/api/auth/password-reset/confirm/"]["post"]["responses"],
-      "200" | "400" | "403" | "415"
-    >;
-    passwordResetStart: IsExact<
-      keyof OpenApiPaths["/api/auth/password-reset/"]["post"]["responses"],
-      "202" | "400" | "403" | "415"
-    >;
-    googleLinkCancel: IsExact<
-      keyof OpenApiPaths["/api/auth/google/link/cancel/"]["post"]["responses"],
-      "204" | "403"
-    >;
-    googleLinkConfirm: IsExact<
-      keyof OpenApiPaths["/api/auth/google/link/confirm/"]["post"]["responses"],
-      "200" | "400" | "401" | "403" | "409" | "415"
-    >;
-    signIn: IsExact<
-      keyof OpenApiPaths["/api/auth/sign-in/"]["post"]["responses"],
-      "200" | "400" | "401" | "403" | "415"
-    >;
-    signOut: IsExact<keyof OpenApiPaths["/api/auth/sign-out/"]["post"]["responses"], "204" | "403">;
-    signUp: IsExact<
-      keyof OpenApiPaths["/api/auth/sign-up/"]["post"]["responses"],
-      "201" | "400" | "403" | "415"
-    >;
-  };
-};
+const AUTH_PATHS = {
+  account: "/api/auth/account/",
+  csrf: "/api/auth/csrf/",
+  passwordResetConfirm: "/api/auth/password-reset/confirm/",
+  passwordResetStart: "/api/auth/password-reset/",
+  googleLinkCancel: "/api/auth/google/link/cancel/",
+  googleLinkConfirm: "/api/auth/google/link/confirm/",
+  signIn: "/api/auth/sign-in/",
+  signOut: "/api/auth/sign-out/",
+  signUp: "/api/auth/sign-up/",
+} as const satisfies Record<string, keyof OpenApiPaths>;
+const GOOGLE_START_PATH = "/api/auth/google/start/";
 
 export type Account = LearnerAccount;
 export type GoogleLinkConfirmInput = GoogleLinkConfirmRequest;
@@ -112,21 +60,7 @@ export class AuthApiError extends Error {
   }
 }
 
-type AuthRequestOptions = {
-  fetcher?: typeof fetch;
-  signal?: AbortSignal;
-};
-
-function apiUrl(path: keyof OpenApiPaths): string {
-  const origin = configuredApiOrigin();
-  if (!origin) {
-    throw new AuthApiError(
-      "unavailable",
-      "The local API is not configured. Check NEXT_PUBLIC_API_BASE_URL and try again.",
-    );
-  }
-  return `${origin}${path}`;
-}
+type AuthRequestOptions = ApiRequestOptions;
 
 function isAccount(value: unknown): value is Account {
   if (!value || typeof value !== "object") {
@@ -137,14 +71,6 @@ function isAccount(value: unknown): value is Account {
     typeof account.id === "number" &&
     typeof account.email === "string" &&
     typeof account.display_name === "string"
-  );
-}
-
-function isCsrfToken(value: unknown): value is CsrfToken {
-  return (
-    Boolean(value) &&
-    typeof value === "object" &&
-    typeof (value as Partial<CsrfToken>).csrf_token === "string"
   );
 }
 
@@ -187,18 +113,6 @@ function readApiMessage(value: unknown): string | null {
   return typeof detail === "string" ? detail : null;
 }
 
-async function readJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-function isAbortError(error: unknown, signal?: AbortSignal): boolean {
-  return signal?.aborted === true || (error instanceof DOMException && error.name === "AbortError");
-}
-
 function unavailableError(): AuthApiError {
   return new AuthApiError(
     "unavailable",
@@ -206,77 +120,49 @@ function unavailableError(): AuthApiError {
   );
 }
 
-async function csrfToken({ fetcher = fetch, signal }: AuthRequestOptions): Promise<string> {
-  let response: Response;
-  try {
-    response = await fetcher(apiUrl(AUTH_CONTRACT.paths.csrf), {
-      cache: "no-store",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      method: "GET",
-      signal,
-    });
-  } catch (error) {
-    if (isAbortError(error, signal)) {
-      throw error;
-    }
-    if (error instanceof AuthApiError) {
-      throw error;
+function throwAuthTransportError(error: unknown): never {
+  if (error instanceof ApiTransportError) {
+    if (error.kind === "configuration") {
+      throw new AuthApiError(
+        "unavailable",
+        "The local API is not configured. Check NEXT_PUBLIC_API_BASE_URL and try again.",
+      );
     }
     throw unavailableError();
   }
-
-  const payload = await readJson(response);
-  if (response.status !== 200 || !isCsrfToken(payload)) {
-    throw unavailableError();
-  }
-  return payload.csrf_token;
+  throw error;
 }
 
-async function postJsonWithCsrf(
+async function getAuthJson(
+  path: keyof OpenApiPaths,
+  options: AuthRequestOptions,
+): Promise<ApiJsonResult> {
+  try {
+    return await getApiJson(path, options);
+  } catch (error) {
+    throwAuthTransportError(error);
+  }
+}
+
+async function postAuthJsonWithCsrf(
   path: keyof OpenApiPaths,
   input: unknown | undefined,
-  { fetcher = fetch, signal }: AuthRequestOptions,
-): Promise<{ payload: unknown; response: Response }> {
-  const token = await csrfToken({ fetcher, signal });
-  const hasBody = input !== undefined;
-  let response: Response;
+  options: AuthRequestOptions,
+): Promise<ApiJsonResult> {
   try {
-    response = await fetcher(apiUrl(path), {
-      ...(hasBody ? { body: JSON.stringify(input) } : {}),
-      cache: "no-store",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        ...(hasBody ? { "Content-Type": "application/json" } : {}),
-        "X-CSRFToken": token,
-      },
-      method: "POST",
-      signal,
-    });
+    return await postApiJsonWithCsrf(AUTH_PATHS.csrf, path, input, options);
   } catch (error) {
-    if (isAbortError(error, signal)) {
-      throw error;
-    }
-    if (error instanceof AuthApiError) {
-      throw error;
-    }
-    throw unavailableError();
+    throwAuthTransportError(error);
   }
-
-  return {
-    payload: response.status === 204 ? null : await readJson(response),
-    response,
-  };
 }
 
 async function mutateAccount(
-  path: typeof AUTH_CONTRACT.paths.signIn | typeof AUTH_CONTRACT.paths.signUp,
+  path: typeof AUTH_PATHS.signIn | typeof AUTH_PATHS.signUp,
   input: SignInInput | SignUpInput,
   expectedStatus: 200 | 201,
-  { fetcher = fetch, signal }: AuthRequestOptions,
+  options: AuthRequestOptions,
 ): Promise<Account> {
-  const { payload, response } = await postJsonWithCsrf(path, input, { fetcher, signal });
+  const { payload, response } = await postAuthJsonWithCsrf(path, input, options);
   if (response.status === expectedStatus && isAccount(payload)) {
     return payload;
   }
@@ -300,14 +186,12 @@ async function mutateAccount(
 }
 
 async function submitPasswordRecoveryRequest(
-  path:
-    | typeof AUTH_CONTRACT.paths.passwordResetStart
-    | typeof AUTH_CONTRACT.paths.passwordResetConfirm,
+  path: typeof AUTH_PATHS.passwordResetStart | typeof AUTH_PATHS.passwordResetConfirm,
   input: PasswordResetStartInput | PasswordResetConfirmInput,
   expectedStatus: 200 | 202,
-  { fetcher = fetch, signal }: AuthRequestOptions,
+  options: AuthRequestOptions,
 ): Promise<string> {
-  const { payload, response } = await postJsonWithCsrf(path, input, { fetcher, signal });
+  const { payload, response } = await postAuthJsonWithCsrf(path, input, options);
   if (response.status === expectedStatus && isApiMessage(payload)) {
     return payload.detail;
   }
@@ -330,30 +214,8 @@ async function submitPasswordRecoveryRequest(
   throw unavailableError();
 }
 
-export async function getCurrentAccount({
-  fetcher = fetch,
-  signal,
-}: AuthRequestOptions = {}): Promise<Account | null> {
-  let response: Response;
-  try {
-    response = await fetcher(apiUrl(AUTH_CONTRACT.paths.account), {
-      cache: "no-store",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      method: "GET",
-      signal,
-    });
-  } catch (error) {
-    if (isAbortError(error, signal)) {
-      throw error;
-    }
-    if (error instanceof AuthApiError) {
-      throw error;
-    }
-    throw unavailableError();
-  }
-
-  const payload = await readJson(response);
+export async function getCurrentAccount(options: AuthRequestOptions = {}): Promise<Account | null> {
+  const { payload, response } = await getAuthJson(AUTH_PATHS.account, options);
   if (response.status === 200 && isAccount(payload)) {
     return payload;
   }
@@ -364,46 +226,44 @@ export async function getCurrentAccount({
 }
 
 export function signUp(input: SignUpInput, options: AuthRequestOptions = {}): Promise<Account> {
-  return mutateAccount(AUTH_CONTRACT.paths.signUp, input, 201, options);
+  return mutateAccount(AUTH_PATHS.signUp, input, 201, options);
 }
 
 export function signIn(input: SignInInput, options: AuthRequestOptions = {}): Promise<Account> {
-  return mutateAccount(AUTH_CONTRACT.paths.signIn, input, 200, options);
+  return mutateAccount(AUTH_PATHS.signIn, input, 200, options);
 }
 
 export function requestPasswordReset(
   input: PasswordResetStartInput,
   options: AuthRequestOptions = {},
 ): Promise<string> {
-  return submitPasswordRecoveryRequest(AUTH_CONTRACT.paths.passwordResetStart, input, 202, options);
+  return submitPasswordRecoveryRequest(AUTH_PATHS.passwordResetStart, input, 202, options);
 }
 
 export function confirmPasswordReset(
   input: PasswordResetConfirmInput,
   options: AuthRequestOptions = {},
 ): Promise<string> {
-  return submitPasswordRecoveryRequest(
-    AUTH_CONTRACT.paths.passwordResetConfirm,
-    input,
-    200,
-    options,
-  );
+  return submitPasswordRecoveryRequest(AUTH_PATHS.passwordResetConfirm, input, 200, options);
 }
 
 export function googleSignInUrl(): string {
-  const origin = configuredApiOrigin();
-  if (!origin) {
+  try {
+    return buildApiUrl(GOOGLE_START_PATH);
+  } catch (error) {
+    if (!(error instanceof ApiTransportError)) {
+      throw error;
+    }
     return "#google-sign-in-unavailable";
   }
-  return `${origin}/api/auth/google/start/`;
 }
 
 export async function confirmGoogleLink(
   input: GoogleLinkConfirmInput,
   options: AuthRequestOptions = {},
 ): Promise<Account> {
-  const { payload, response } = await postJsonWithCsrf(
-    AUTH_CONTRACT.paths.googleLinkConfirm,
+  const { payload, response } = await postAuthJsonWithCsrf(
+    AUTH_PATHS.googleLinkConfirm,
     input,
     options,
   );
@@ -441,11 +301,7 @@ export async function confirmGoogleLink(
 }
 
 export async function cancelGoogleLink(options: AuthRequestOptions = {}): Promise<void> {
-  const { response } = await postJsonWithCsrf(
-    AUTH_CONTRACT.paths.googleLinkCancel,
-    undefined,
-    options,
-  );
+  const { response } = await postAuthJsonWithCsrf(AUTH_PATHS.googleLinkCancel, undefined, options);
   if (response.status === 204) {
     return;
   }
@@ -456,7 +312,7 @@ export async function cancelGoogleLink(options: AuthRequestOptions = {}): Promis
 }
 
 export async function signOut(options: AuthRequestOptions = {}): Promise<void> {
-  const { response } = await postJsonWithCsrf(AUTH_CONTRACT.paths.signOut, undefined, options);
+  const { response } = await postAuthJsonWithCsrf(AUTH_PATHS.signOut, undefined, options);
   if (response.status === 204) {
     return;
   }

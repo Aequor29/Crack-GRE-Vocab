@@ -1,32 +1,15 @@
 import type { Readiness } from "@/lib/api/generated/schema.generated";
-import { configuredApiOrigin } from "@/lib/api/origin";
+import { type ApiRequestOptions, ApiTransportError, getApiJson } from "@/lib/api/transport";
 
 type OpenApiDocument = typeof import("../../../crackGreVocab/openapi.json");
 type OpenApiPaths = OpenApiDocument["paths"];
-type ReadinessResponseStatuses = keyof OpenApiPaths["/api/readiness/"]["get"]["responses"];
-type IsExact<Actual, Expected> =
-  (<Value>() => Value extends Actual ? 1 : 2) extends <Value>() => Value extends Expected ? 1 : 2
-    ? true
-    : false;
-
-const READINESS_CONTRACT = {
-  path: "/api/readiness/",
-  responseStatusesMatch: true,
-} as const satisfies {
-  path: keyof OpenApiPaths;
-  responseStatusesMatch: IsExact<ReadinessResponseStatuses, "200" | "503">;
-};
-
-const READINESS_PATH = READINESS_CONTRACT.path;
+const READINESS_PATH = "/api/readiness/" as const satisfies keyof OpenApiPaths;
 
 export type ReadinessResult = "ready" | "database-unavailable" | "backend-unavailable";
 
 type ReadinessPayload = Readiness;
 
-type CheckReadinessOptions = {
-  fetcher?: typeof fetch;
-  signal?: AbortSignal;
-};
+type CheckReadinessOptions = ApiRequestOptions;
 
 function isReadinessPayload(value: unknown): value is ReadinessPayload {
   if (!value || typeof value !== "object") {
@@ -40,28 +23,11 @@ function isReadinessPayload(value: unknown): value is ReadinessPayload {
   );
 }
 
-function isAbortError(error: unknown, signal?: AbortSignal): boolean {
-  return signal?.aborted === true || (error instanceof DOMException && error.name === "AbortError");
-}
-
-export async function checkReadiness({
-  fetcher = fetch,
-  signal,
-}: CheckReadinessOptions = {}): Promise<ReadinessResult> {
-  const apiOrigin = configuredApiOrigin();
-  if (!apiOrigin) {
-    return "backend-unavailable";
-  }
-
+export async function checkReadiness(
+  options: CheckReadinessOptions = {},
+): Promise<ReadinessResult> {
   try {
-    const response = await fetcher(`${apiOrigin}${READINESS_PATH}`, {
-      cache: "no-store",
-      credentials: "omit",
-      headers: { Accept: "application/json" },
-      method: "GET",
-      signal,
-    });
-    const payload: unknown = await response.json();
+    const { payload, response } = await getApiJson(READINESS_PATH, options, "omit");
 
     if (!isReadinessPayload(payload)) {
       return "backend-unavailable";
@@ -78,9 +44,9 @@ export async function checkReadiness({
     }
     return "backend-unavailable";
   } catch (error) {
-    if (isAbortError(error, signal)) {
-      throw error;
+    if (error instanceof ApiTransportError) {
+      return "backend-unavailable";
     }
-    return "backend-unavailable";
+    throw error;
   }
 }

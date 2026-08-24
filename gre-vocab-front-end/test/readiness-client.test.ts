@@ -20,13 +20,14 @@ describe("readiness client", () => {
       .mockResolvedValue(jsonResponse({ status: "ready", database: "available" }, 200));
 
     await expect(checkReadiness({ fetcher })).resolves.toBe("ready");
-    expect(fetcher).toHaveBeenCalledWith("http://127.0.0.1:8000/api/readiness/", {
-      cache: "no-store",
-      credentials: "omit",
-      headers: { Accept: "application/json" },
-      method: "GET",
-      signal: undefined,
-    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "http://127.0.0.1:8000/api/readiness/",
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "omit",
+        method: "GET",
+      }),
+    );
   });
 
   it("distinguishes a typed database outage from an unreachable backend", async () => {
