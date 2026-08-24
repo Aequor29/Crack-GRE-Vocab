@@ -24,7 +24,7 @@ class StudyOpenApiTests(SimpleTestCase):
             {"200", "201", "400", "403", "409", "415", "503"},
         )
         self.assertEqual(active["operationId"], "study_session_active_retrieve")
-        self.assertEqual(set(active["responses"]), {"200", "403", "404"})
+        self.assertEqual(set(active["responses"]), {"200", "403", "404", "503"})
         self.assertEqual(answer["operationId"], "study_session_answer_create")
         self.assertEqual(
             set(answer["responses"]),

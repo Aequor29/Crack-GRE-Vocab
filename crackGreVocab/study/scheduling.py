@@ -3,7 +3,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
 
@@ -68,18 +67,12 @@ class SchedulerTransition:
     next_phase: str
     next_due_at: datetime
     next_state: dict[str, object]
-    difficulty: Decimal | None
-    stability: Decimal | None
 
 
 def _require_utc_datetime(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise SchedulingStateError("Scheduler instants must be timezone-aware.")
     return value.astimezone(UTC)
-
-
-def _decimal_from_float(value: float | None) -> Decimal | None:
-    return Decimal(str(value)) if value is not None else None
 
 
 def _restore_fsrs_card(
@@ -137,6 +130,4 @@ def schedule_recall(
         next_phase=_PHASES[next_card.state],
         next_due_at=next_card.due,
         next_state=dict(next_card.to_dict()),
-        difficulty=_decimal_from_float(next_card.difficulty),
-        stability=_decimal_from_float(next_card.stability),
     )

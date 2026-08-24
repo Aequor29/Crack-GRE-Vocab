@@ -2,11 +2,13 @@
 
 import json
 import uuid
+from datetime import timedelta
 
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
-from study.models import RecallAnswer, RecallOutcome
-from study.services import plan_study_session
+from django.utils import timezone
+from study.models import LearnerWordState, RecallAnswer, RecallOutcome
+from study.services import StudyStateInvariantError, plan_study_session
 
 from .study_helpers import create_corpus, create_learner
 
@@ -103,7 +105,9 @@ class RecallAnswerApiTests(TestCase):
         )
 
         self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(invalid.json()["code"], "validation_error")
         self.assertEqual(missing_csrf.status_code, 403)
+        self.assertEqual(missing_csrf.json()["code"], "csrf_failed")
         self.assertEqual(out_of_order.status_code, 409)
         self.assertEqual(out_of_order.json()["code"], "study_item_out_of_order")
         self.assertEqual(
@@ -121,3 +125,34 @@ class RecallAnswerApiTests(TestCase):
         )
         self.assertEqual(foreign.status_code, 404)
         self.assertEqual(foreign.json()["code"], "study_item_not_found")
+
+    def test_state_invariant_defect_is_not_reported_as_retryable(self):
+        session = plan_study_session(
+            learner=self.learner,
+            new_word_target=1,
+        ).session
+        item = session.items.get()
+        now = timezone.now()
+        LearnerWordState.objects.create(
+            learner=self.learner,
+            word=item.corpus_entry.word,
+            phase="learning",
+            review_count=1,
+            last_reviewed_at=now,
+            next_due_at=now + timedelta(minutes=10),
+            scheduler_version="test-scheduler",
+            scheduler_state={"card_id": item.corpus_entry.word_id.int},
+        )
+
+        with self.assertRaises(StudyStateInvariantError):
+            self.post_answer(
+                session,
+                item,
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "remembered",
+                },
+            )
+
+        self.assertFalse(RecallAnswer.objects.exists())
+        self.assertFalse(RecallOutcome.objects.exists())

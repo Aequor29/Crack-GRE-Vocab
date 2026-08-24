@@ -2,11 +2,9 @@
 
 from collections.abc import Sequence
 from datetime import datetime
-from decimal import Decimal
 from uuid import UUID
 
 from accounts.models import LearnerAccount
-from django.db.models import Subquery
 from vocabulary.models import CorpusEntry, CorpusVersion
 
 from .models import (
@@ -46,7 +44,7 @@ def lock_session_item(
 ) -> StudySessionItem | None:
     """Lock and return a session-owned study item, if it exists."""
     return (
-        StudySessionItem.objects.select_for_update()
+        StudySessionItem.objects.select_for_update(of=("self",))
         .select_related("corpus_entry__word")
         .filter(pk=item_id, session=session)
         .first()
@@ -58,12 +56,10 @@ def lock_current_session_item(
     session: StudySession,
 ) -> StudySessionItem | None:
     """Lock and return the next unanswered item in the planned order."""
-    answered_item_ids = RecallAnswer.objects.values("item_id")
     return (
-        StudySessionItem.objects.select_for_update()
+        StudySessionItem.objects.select_for_update(of=("self",))
         .select_related("corpus_entry__word")
-        .filter(session=session)
-        .exclude(pk__in=Subquery(answered_item_ids))
+        .filter(session=session, answer__isnull=True)
         .order_by("position")
         .first()
     )
@@ -82,22 +78,6 @@ def lock_word_state(
     )
 
 
-def _decimal_snapshot(value: Decimal | None) -> str | None:
-    return str(value) if value is not None else None
-
-
-def _state_snapshot(state: LearnerWordState) -> dict[str, object]:
-    return {
-        "difficulty": _decimal_snapshot(state.difficulty),
-        "lapse_count": state.lapse_count,
-        "last_reviewed_at": state.last_reviewed_at.isoformat(),
-        "phase": state.phase,
-        "review_count": state.review_count,
-        "scheduler_state": state.scheduler_state,
-        "stability": _decimal_snapshot(state.stability),
-    }
-
-
 def _session_items(
     *,
     session: StudySession,
@@ -112,7 +92,7 @@ def _session_items(
             kind=StudySessionItem.Kind.DUE,
             due_at_snapshot=state.next_due_at,
             scheduler_version=state.scheduler_version,
-            scheduling_state_snapshot=_state_snapshot(state),
+            scheduling_state_snapshot=state.scheduler_state,
         )
         for position, (state, entry) in enumerate(due_items, start=1)
     ]
@@ -138,13 +118,14 @@ def persist_study_session_plan(
     planner_version: str,
 ) -> StudySession:
     """Persist one complete plan; the caller owns the surrounding transaction."""
+    entries = tuple(entry for _, entry in due_items) + tuple(new_entries)
+    if any(entry.corpus_id != corpus.pk for entry in entries):
+        raise ValueError("Every Study Session item must belong to the session corpus.")
     session = StudySession.objects.create(
         learner=learner,
         corpus=corpus,
         status=StudySession.Status.ACTIVE,
         new_word_target=new_word_target,
-        planned_new_word_count=len(new_entries),
-        item_count=len(due_items) + len(new_entries),
         planner_version=planner_version,
     )
     StudySessionItem.objects.bulk_create(
@@ -201,8 +182,6 @@ def persist_recall_answer_transition(
 
     values = {
         "phase": transition.next_phase,
-        "difficulty": transition.difficulty,
-        "stability": transition.stability,
         "review_count": review_number,
         "lapse_count": lapse_count,
         "last_reviewed_at": occurred_at,

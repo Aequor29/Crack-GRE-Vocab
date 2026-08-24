@@ -1,7 +1,15 @@
 """Authenticated Study Session planning and resume endpoints."""
 
-from django.db import DatabaseError
+from accounts.authentication import CsrfRejected
+from django.db import InterfaceError, OperationalError
 from drf_spectacular.utils import extend_schema
+from rest_framework.exceptions import (
+    AuthenticationFailed,
+    NotAuthenticated,
+    ParseError,
+    UnsupportedMediaType,
+    ValidationError,
+)
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import JSONRenderer
@@ -27,11 +35,22 @@ from .serializers import (
 from .services import (
     StudyAnswerConflict,
     StudyAnswerNotFound,
-    StudyAnswerUnavailable,
     StudyPlanningUnavailable,
     plan_study_session,
     record_recall_answer,
 )
+
+
+def _database_temporarily_unavailable(detail: str) -> Response:
+    """Return the stable response for an expected transient database failure."""
+    return Response(
+        {
+            "code": "study_temporarily_unavailable",
+            "detail": detail,
+            "retryable": True,
+        },
+        status=HTTP_503_SERVICE_UNAVAILABLE,
+    )
 
 
 class StudyApiView(APIView):
@@ -40,6 +59,24 @@ class StudyApiView(APIView):
     parser_classes = (JSONParser,)
     renderer_classes = (JSONRenderer,)
     permission_classes = (IsAuthenticated,)
+
+    def handle_exception(self, exc):
+        """Add stable codes to framework-owned Study API failures."""
+        response = super().handle_exception(exc)
+        if isinstance(exc, CsrfRejected):
+            code = "csrf_failed"
+        elif isinstance(exc, (AuthenticationFailed, NotAuthenticated)):
+            code = "authentication_required"
+        elif isinstance(exc, ValidationError):
+            code = "validation_error"
+        elif isinstance(exc, ParseError):
+            code = "invalid_json"
+        elif isinstance(exc, UnsupportedMediaType):
+            code = "unsupported_media_type"
+        else:
+            return response
+        response.data = {"code": code, **response.data}
+        return response
 
     def finalize_response(self, request, response, *args, **kwargs):
         """Attach no-store caching to every Study API response."""
@@ -76,11 +113,13 @@ class StudySessionCollectionView(StudyApiView):
                 new_word_target=serializer.validated_data["new_word_target"],
             )
         except StudyPlanningUnavailable as exc:
-            return Response({"detail": str(exc)}, status=HTTP_409_CONFLICT)
-        except DatabaseError:
             return Response(
-                {"detail": "The Study Session could not be persisted."},
-                status=HTTP_503_SERVICE_UNAVAILABLE,
+                {"code": exc.code, "detail": exc.detail},
+                status=HTTP_409_CONFLICT,
+            )
+        except (InterfaceError, OperationalError):
+            return _database_temporarily_unavailable(
+                "The Study Session could not be persisted."
             )
 
         return Response(
@@ -100,14 +139,23 @@ class ActiveStudySessionView(StudyApiView):
             200: StudySessionSerializer,
             403: StudyPlanningErrorSerializer,
             404: StudyPlanningErrorSerializer,
+            503: StudyPlanningErrorSerializer,
         },
     )
     def get(self, request) -> Response:
         """Return the active Study Session or a not-found response."""
-        session = get_active_study_session(learner=request.user)
+        try:
+            session = get_active_study_session(learner=request.user)
+        except (InterfaceError, OperationalError):
+            return _database_temporarily_unavailable(
+                "The Study Session could not be loaded."
+            )
         if session is None:
             return Response(
-                {"detail": "No active Study Session exists."},
+                {
+                    "code": "study_session_not_found",
+                    "detail": "No active Study Session exists.",
+                },
                 status=HTTP_404_NOT_FOUND,
             )
         return Response(StudySessionSerializer(session).data, status=HTTP_200_OK)
@@ -154,23 +202,9 @@ class StudySessionAnswerView(StudyApiView):
             if exc.current_item_id is not None:
                 payload["current_item_id"] = exc.current_item_id
             return Response(payload, status=HTTP_409_CONFLICT)
-        except StudyAnswerUnavailable:
-            return Response(
-                {
-                    "code": "study_temporarily_unavailable",
-                    "detail": "The Recall Outcome could not be scheduled safely.",
-                    "retryable": True,
-                },
-                status=HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except DatabaseError:
-            return Response(
-                {
-                    "code": "study_temporarily_unavailable",
-                    "detail": "The Recall Outcome could not be persisted.",
-                    "retryable": True,
-                },
-                status=HTTP_503_SERVICE_UNAVAILABLE,
+        except (InterfaceError, OperationalError):
+            return _database_temporarily_unavailable(
+                "The Recall Outcome could not be persisted."
             )
 
         response = StudyAnswerResponseSerializer(

@@ -5,10 +5,14 @@ from rest_framework import serializers
 from vocabulary.models import VocabularySense
 
 from .models import RecallAnswer, RecallOutcome, StudySession, StudySessionItem
+from .policy import MAX_NEW_WORDS_PER_SESSION
 
 
 class CreateStudySessionSerializer(serializers.Serializer):
-    new_word_target = serializers.IntegerField(min_value=0, max_value=20)
+    new_word_target = serializers.IntegerField(
+        min_value=0,
+        max_value=MAX_NEW_WORDS_PER_SESSION,
+    )
 
 
 class RecordRecallAnswerSerializer(serializers.Serializer):
@@ -51,6 +55,8 @@ class StudySessionItemSerializer(serializers.ModelSerializer):
 class StudySessionSerializer(serializers.ModelSerializer):
     corpus_version = serializers.CharField(source="corpus.version", read_only=True)
     items = StudySessionItemSerializer(many=True, read_only=True)
+    planned_new_word_count = serializers.SerializerMethodField()
+    item_count = serializers.SerializerMethodField()
     answered_count = serializers.SerializerMethodField()
     remaining_count = serializers.SerializerMethodField()
     current_item = serializers.SerializerMethodField()
@@ -61,7 +67,17 @@ class StudySessionSerializer(serializers.ModelSerializer):
 
     def get_answered_count(self, session: StudySession) -> int:
         """Return how many planned items have accepted answers."""
-        return session.item_count - len(self._unanswered_items(session))
+        return self.get_item_count(session) - len(self._unanswered_items(session))
+
+    def get_planned_new_word_count(self, session: StudySession) -> int:
+        """Derive how many persisted items introduce new Words."""
+        return sum(
+            item.kind == StudySessionItem.Kind.NEW for item in session.items.all()
+        )
+
+    def get_item_count(self, session: StudySession) -> int:
+        """Derive total progress from the persisted session items."""
+        return len(session.items.all())
 
     def get_remaining_count(self, session: StudySession) -> int:
         """Return how many planned items still need an accepted answer."""
@@ -135,13 +151,14 @@ class StudyAnswerResponseSerializer(serializers.Serializer):
 
 
 class StudyPlanningErrorSerializer(serializers.Serializer):
-    code = serializers.CharField(required=False)
+    code = serializers.CharField()
     detail = serializers.CharField()
     current_item_id = serializers.UUIDField(required=False)
     retryable = serializers.BooleanField(required=False)
 
 
 class StudyValidationErrorSerializer(serializers.Serializer):
+    code = serializers.CharField()
     detail = serializers.CharField(required=False)
     client_request_id = serializers.ListField(
         child=serializers.CharField(),

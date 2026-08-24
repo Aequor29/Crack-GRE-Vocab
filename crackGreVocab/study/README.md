@@ -16,16 +16,21 @@ data-migration path.
 4. Persist the session, ordered items, and due-state snapshots in one database
    transaction before returning any content.
 
+Session totals and progress are derived from those persisted items when the
+response is serialized; the session row does not cache counters that could
+drift from its item relation.
+
 Due work consumes capacity before new material. A high due count can therefore
 reduce the planned new count below the learner's target. A Word is unseen when
 the learner has no scheduling state for its stable Word identity; an abandoned,
 unanswered new item remains eligible because session planning does not create
 scheduling state.
 
-The planner returns an explicit conflict when there is no active corpus or no
+The planner returns a coded conflict when there is no active corpus or no
 eligible work. The partial unique constraint on active sessions and the locked
-learner row enforce one active session in the current synchronous path. AEQ-16
-will add the dedicated concurrent-request and retry contract.
+learner row enforce one active session under concurrent requests. The write
+path also rejects any corpus entry that does not belong to the session corpus
+before it creates the session row.
 
 ## Scheduling boundary
 
@@ -36,6 +41,9 @@ ten-minute relearning step, a 36,500-day maximum interval, and disables
 fuzzing. Every transition receives one explicit server UTC instant and stores
 the complete serialized card state. Browser code never reconstructs planning
 or scheduling rules.
+
+The complete FSRS card is canonical. Difficulty and stability are not copied
+into separate columns because Milestone 1 has no read model that queries them.
 
 Only a Review-phase Forgot increments the lapse count. A new or learning Word
 still receives the appropriate failed-recall transition without being counted
@@ -53,13 +61,18 @@ as a review lapse.
 All endpoints require the Django session. Mutations also require the CSRF cookie
 and masked `X-CSRFToken` issued by `GET /api/auth/csrf/`.
 
+Study failures include stable machine-readable codes. Authentication and CSRF
+rejection do not require clients to parse framework messages. Only connection
+and operational database failures are returned as retryable `503` responses;
+integrity, schema, and programming defects surface as server errors.
+
 ## Code boundaries
 
 - `selectors.py` owns read-only ORM query shapes and ordering.
 - `persistence.py` owns row locking and Study Session writes; callers provide
   the transaction boundary.
-- `services.py` owns product policy, business exceptions, and transactional
-  orchestration.
+- `policy.py` owns shared planning limits and version identifiers.
+- `services.py` owns business exceptions and transactional orchestration.
 - `scheduling.py` owns the pure, versioned FSRS adapter and contains no ORM
   access.
 - `models.py` owns durable relationships and database constraints.

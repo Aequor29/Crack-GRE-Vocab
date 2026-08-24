@@ -169,7 +169,9 @@ describe("study API client", () => {
     const rejectedCsrfFetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ csrf_token: "stale-token" }, 200))
-      .mockResolvedValueOnce(jsonResponse({ detail: "CSRF Failed: CSRF token missing." }, 403));
+      .mockResolvedValueOnce(
+        jsonResponse({ code: "csrf_failed", detail: "Request proof rejected." }, 403),
+      );
 
     await expect(getActiveStudySession({ fetcher: expiredLoginFetcher })).rejects.toMatchObject({
       kind: "unauthenticated",
