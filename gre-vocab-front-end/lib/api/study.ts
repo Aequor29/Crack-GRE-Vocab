@@ -4,7 +4,13 @@ import type {
   StudyPlanningError,
   StudySession,
 } from "@/lib/api/generated/schema.generated";
-import { configuredApiOrigin } from "@/lib/api/origin";
+import {
+  type ApiJsonResult,
+  type ApiRequestOptions,
+  ApiTransportError,
+  getApiJson,
+  postApiJsonWithCsrf,
+} from "@/lib/api/transport";
 
 type OpenApiDocument = typeof import("../../../crackGreVocab/openapi.json");
 type OpenApiPaths = OpenApiDocument["paths"];
@@ -60,22 +66,7 @@ export class StudyApiError extends Error {
   }
 }
 
-export type StudyRequestOptions = {
-  fetcher?: typeof fetch;
-  signal?: AbortSignal;
-};
-
-function buildStudyApiUrl(path: string): string {
-  const origin = configuredApiOrigin();
-  if (!origin) {
-    throw createStudyUnavailableError("The local API is not configured.");
-  }
-  return `${origin}${path}`;
-}
-
-function isAbortError(error: unknown, signal?: AbortSignal): boolean {
-  return signal?.aborted === true || (error instanceof DOMException && error.name === "AbortError");
-}
+export type StudyRequestOptions = ApiRequestOptions;
 
 function createStudyUnavailableError(message = "The local backend is unavailable."): StudyApiError {
   return new StudyApiError(
@@ -87,31 +78,78 @@ function createStudyUnavailableError(message = "The local backend is unavailable
   );
 }
 
-async function requestStudyApi(
-  path: string,
-  init: RequestInit,
-  { fetcher = fetch, signal }: StudyRequestOptions,
-): Promise<Response> {
-  try {
-    return await fetcher(buildStudyApiUrl(path), { ...init, signal });
-  } catch (error) {
-    if (isAbortError(error, signal) || error instanceof StudyApiError) {
-      throw error;
+function throwStudyTransportError(error: unknown): never {
+  if (error instanceof ApiTransportError) {
+    if (error.kind === "configuration") {
+      throw createStudyUnavailableError("The local API is not configured.");
+    }
+    if (error.kind === "csrf-token") {
+      throw createStudyUnavailableError("A fresh form token could not be obtained.");
     }
     throw createStudyUnavailableError();
   }
+  throw error;
 }
 
-async function readResponseJson(response: Response): Promise<unknown> {
+async function getStudyJson(
+  path: keyof OpenApiPaths,
+  options: StudyRequestOptions,
+): Promise<ApiJsonResult> {
   try {
-    return await response.json();
-  } catch {
-    return null;
+    return await getApiJson(path, options);
+  } catch (error) {
+    throwStudyTransportError(error);
+  }
+}
+
+async function postStudyJsonWithCsrf(
+  path: string,
+  body: unknown,
+  options: StudyRequestOptions,
+): Promise<ApiJsonResult> {
+  try {
+    return await postApiJsonWithCsrf(CSRF_PATH, path, body, options);
+  } catch (error) {
+    throwStudyTransportError(error);
   }
 }
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isStudySense(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const sense = value as Record<string, unknown>;
+  return (
+    isNumber(sense.position) &&
+    (sense.part_of_speech === undefined || isString(sense.part_of_speech)) &&
+    isString(sense.definition) &&
+    isString(sense.example)
+  );
+}
+
+function isStudySessionItem(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const item = value as Record<string, unknown>;
+  return (
+    isString(item.id) &&
+    isNumber(item.position) &&
+    (item.kind === "due" || item.kind === "new") &&
+    isString(item.word_id) &&
+    isString(item.term) &&
+    isString(item.pronunciation) &&
+    Array.isArray(item.senses) &&
+    item.senses.every(isStudySense)
+  );
 }
 
 function isStudySession(value: unknown): value is StudySession {
@@ -124,12 +162,52 @@ function isStudySession(value: unknown): value is StudySession {
     (session.status === "active" ||
       session.status === "completed" ||
       session.status === "abandoned") &&
-    typeof session.item_count === "number" &&
-    typeof session.answered_count === "number" &&
-    typeof session.remaining_count === "number" &&
+    isString(session.corpus_version) &&
+    isNumber(session.new_word_target) &&
+    isNumber(session.planned_new_word_count) &&
+    isNumber(session.item_count) &&
+    isString(session.planner_version) &&
+    isString(session.created_at) &&
+    (session.ended_at === undefined || session.ended_at === null || isString(session.ended_at)) &&
+    isNumber(session.answered_count) &&
+    isNumber(session.remaining_count) &&
     Array.isArray(session.items) &&
-    (session.current_item === null ||
-      (Boolean(session.current_item) && isString(session.current_item?.id)))
+    session.items.every(isStudySessionItem) &&
+    (session.current_item === null || isStudySessionItem(session.current_item))
+  );
+}
+
+function isRecallAnswer(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const answer = value as Record<string, unknown>;
+  return (
+    isString(answer.id) &&
+    isString(answer.item_id) &&
+    isString(answer.client_request_id) &&
+    (answer.rating === "remembered" || answer.rating === "forgot") &&
+    isString(answer.submitted_at) &&
+    isString(answer.accepted_at)
+  );
+}
+
+function isRecallOutcome(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const outcome = value as Record<string, unknown>;
+  return (
+    isString(outcome.id) &&
+    isNumber(outcome.review_number) &&
+    isString(outcome.scheduler_version) &&
+    isString(outcome.previous_phase) &&
+    isString(outcome.next_phase) &&
+    (outcome.previous_due_at === undefined ||
+      outcome.previous_due_at === null ||
+      isString(outcome.previous_due_at)) &&
+    isString(outcome.next_due_at) &&
+    isString(outcome.occurred_at)
   );
 }
 
@@ -137,14 +215,12 @@ function isStudyAnswerResponse(value: unknown): value is StudyAnswerResponse {
   if (!value || typeof value !== "object") {
     return false;
   }
-  const response = value as Partial<StudyAnswerResponse>;
+  const answerResponse = value as Partial<StudyAnswerResponse>;
   return (
-    Boolean(response.answer) &&
-    isString(response.answer?.id) &&
-    Boolean(response.outcome) &&
-    isString(response.outcome?.id) &&
-    typeof response.replayed === "boolean" &&
-    isStudySession(response.session)
+    isRecallAnswer(answerResponse.answer) &&
+    isRecallOutcome(answerResponse.outcome) &&
+    typeof answerResponse.replayed === "boolean" &&
+    isStudySession(answerResponse.session)
   );
 }
 
@@ -157,6 +233,8 @@ function createStudyErrorFromResponse(response: Response, payload: unknown): Stu
   const detail = isString(error.detail)
     ? error.detail
     : "The study request could not be completed.";
+  const code = isString(error.code) ? error.code : null;
+  const currentItemId = isString(error.current_item_id) ? error.current_item_id : null;
   if (response.status === 400) {
     return new StudyApiError("validation", detail);
   }
@@ -172,12 +250,12 @@ function createStudyErrorFromResponse(response: Response, payload: unknown): Stu
     return new StudyApiError("unauthenticated", "Your sign-in expired. Sign in again to continue.");
   }
   if (response.status === 404) {
-    return new StudyApiError("not-found", detail, { code: error.code });
+    return new StudyApiError("not-found", detail, { code });
   }
   if (response.status === 409) {
     return new StudyApiError("conflict", detail, {
-      code: error.code,
-      currentItemId: error.current_item_id,
+      code,
+      currentItemId,
     });
   }
   if (response.status === 503) {
@@ -186,42 +264,10 @@ function createStudyErrorFromResponse(response: Response, payload: unknown): Stu
   return createStudyUnavailableError();
 }
 
-async function fetchFreshCsrfToken(options: StudyRequestOptions): Promise<string> {
-  const response = await requestStudyApi(
-    CSRF_PATH,
-    {
-      cache: "no-store",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      method: "GET",
-    },
-    options,
-  );
-  const payload = await readResponseJson(response);
-  const token =
-    payload && typeof payload === "object"
-      ? (payload as { csrf_token?: unknown }).csrf_token
-      : null;
-  if (response.status !== 200 || !isString(token)) {
-    throw createStudyUnavailableError("A fresh form token could not be obtained.");
-  }
-  return token;
-}
-
 export async function getActiveStudySession(
   options: StudyRequestOptions = {},
 ): Promise<StudySession | null> {
-  const response = await requestStudyApi(
-    STUDY_CONTRACT.active,
-    {
-      cache: "no-store",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      method: "GET",
-    },
-    options,
-  );
-  const payload = await readResponseJson(response);
+  const { payload, response } = await getStudyJson(STUDY_CONTRACT.active, options);
   if (response.status === 200 && isStudySession(payload)) {
     return payload;
   }
@@ -235,23 +281,11 @@ export async function createStudySession(
   newWordTarget: number,
   options: StudyRequestOptions = {},
 ): Promise<StudySession> {
-  const token = await fetchFreshCsrfToken(options);
-  const response = await requestStudyApi(
+  const { payload, response } = await postStudyJsonWithCsrf(
     STUDY_CONTRACT.sessions,
-    {
-      body: JSON.stringify({ new_word_target: newWordTarget }),
-      cache: "no-store",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-CSRFToken": token,
-      },
-      method: "POST",
-    },
+    { new_word_target: newWordTarget },
     options,
   );
-  const payload = await readResponseJson(response);
   if ((response.status === 200 || response.status === 201) && isStudySession(payload)) {
     return payload;
   }
@@ -262,29 +296,17 @@ export async function submitRecallAnswer(
   input: RecallAnswerInput,
   options: StudyRequestOptions = {},
 ): Promise<StudyAnswerResponse> {
-  const token = await fetchFreshCsrfToken(options);
   const path = STUDY_CONTRACT.answer
     .replace("{session_id}", input.sessionId)
     .replace("{item_id}", input.itemId);
-  const response = await requestStudyApi(
+  const { payload, response } = await postStudyJsonWithCsrf(
     path,
     {
-      body: JSON.stringify({
-        client_request_id: input.client_request_id,
-        rating: input.rating,
-      } satisfies RecordRecallAnswerRequest),
-      cache: "no-store",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-CSRFToken": token,
-      },
-      method: "POST",
-    },
+      client_request_id: input.client_request_id,
+      rating: input.rating,
+    } satisfies RecordRecallAnswerRequest,
     options,
   );
-  const payload = await readResponseJson(response);
   if ((response.status === 200 || response.status === 201) && isStudyAnswerResponse(payload)) {
     return payload;
   }

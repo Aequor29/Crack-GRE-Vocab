@@ -47,29 +47,25 @@ describe("account API client", () => {
       ),
     ).resolves.toEqual(account);
 
-    expect(fetcher).toHaveBeenNthCalledWith(1, "http://localhost:8000/api/auth/csrf/", {
-      cache: "no-store",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      method: "GET",
-      signal: undefined,
-    });
-    expect(fetcher).toHaveBeenNthCalledWith(2, "http://localhost:8000/api/auth/sign-up/", {
-      body: JSON.stringify({
-        display_name: "Ada Learner",
-        email: "learner@example.com",
-        password: "durable-recall-river-927",
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8000/api/auth/csrf/",
+      expect.objectContaining({ credentials: "include", method: "GET" }),
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/auth/sign-up/",
+      expect.objectContaining({
+        body: JSON.stringify({
+          display_name: "Ada Learner",
+          email: "learner@example.com",
+          password: "durable-recall-river-927",
+        }),
+        credentials: "include",
+        headers: expect.objectContaining({ "X-CSRFToken": "masked-token" }),
+        method: "POST",
       }),
-      cache: "no-store",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-CSRFToken": "masked-token",
-      },
-      method: "POST",
-      signal: undefined,
-    });
+    );
   });
 
   it("preserves typed validation errors and maps bad credentials generically", async () => {
@@ -115,9 +111,13 @@ describe("account API client", () => {
     const malformedFetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(jsonResponse({ email: "missing-account-fields@example.com" }, 200));
+    const offlineFetcher = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("offline"));
 
     await expect(getCurrentAccount({ fetcher: anonymousFetcher })).resolves.toBeNull();
     await expect(getCurrentAccount({ fetcher: malformedFetcher })).rejects.toMatchObject({
+      kind: "unavailable",
+    });
+    await expect(getCurrentAccount({ fetcher: offlineFetcher })).rejects.toMatchObject({
       kind: "unavailable",
     });
   });

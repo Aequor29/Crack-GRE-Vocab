@@ -101,6 +101,22 @@ describe("study API client", () => {
     );
   });
 
+  it("rejects malformed nested session content before the study UI can dereference it", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const malformedSession = {
+      ...session,
+      current_item: {
+        ...item,
+        senses: [{ ...item.senses[0], definition: 42 }],
+      },
+    };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(malformedSession, 200));
+
+    await expect(getActiveStudySession({ fetcher })).rejects.toMatchObject({
+      kind: "unavailable",
+    } satisfies Partial<StudyApiError>);
+  });
+
   it("creates a session only after obtaining a fresh CSRF token", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
     const fetcher = vi
@@ -172,6 +188,7 @@ describe("study API client", () => {
       .mockResolvedValueOnce(
         jsonResponse({ code: "csrf_failed", detail: "Request proof rejected." }, 403),
       );
+    const offlineFetcher = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("offline"));
 
     await expect(getActiveStudySession({ fetcher: expiredLoginFetcher })).rejects.toMatchObject({
       kind: "unauthenticated",
@@ -179,6 +196,10 @@ describe("study API client", () => {
     } satisfies Partial<StudyApiError>);
     await expect(createStudySession(1, { fetcher: rejectedCsrfFetcher })).rejects.toMatchObject({
       kind: "csrf",
+      retryable: true,
+    } satisfies Partial<StudyApiError>);
+    await expect(getActiveStudySession({ fetcher: offlineFetcher })).rejects.toMatchObject({
+      kind: "unavailable",
       retryable: true,
     } satisfies Partial<StudyApiError>);
   });
