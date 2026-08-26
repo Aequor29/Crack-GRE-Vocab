@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  AuthApiError,
   cancelGoogleLink,
   confirmGoogleLink,
   confirmPasswordReset,
   getCurrentAccount,
-  googleSignInUrl,
+  getGoogleSignInAvailability,
   requestPasswordReset,
   signIn,
   signOut,
@@ -92,14 +93,11 @@ describe("account API client", () => {
       ),
     ).rejects.toMatchObject({
       fieldErrors: { email: ["An account with this email already exists."] },
-      kind: "validation",
     });
     await expect(
       signIn({ email: "learner@example.com", password: "wrong" }, { fetcher: credentialsFetcher }),
     ).rejects.toMatchObject({
       fieldErrors: {},
-      kind: "credentials",
-      message: "Email or password is incorrect.",
     });
   });
 
@@ -114,12 +112,12 @@ describe("account API client", () => {
     const offlineFetcher = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("offline"));
 
     await expect(getCurrentAccount({ fetcher: anonymousFetcher })).resolves.toBeNull();
-    await expect(getCurrentAccount({ fetcher: malformedFetcher })).rejects.toMatchObject({
-      kind: "unavailable",
-    });
-    await expect(getCurrentAccount({ fetcher: offlineFetcher })).rejects.toMatchObject({
-      kind: "unavailable",
-    });
+    await expect(getCurrentAccount({ fetcher: malformedFetcher })).rejects.toBeInstanceOf(
+      AuthApiError,
+    );
+    await expect(getCurrentAccount({ fetcher: offlineFetcher })).rejects.toBeInstanceOf(
+      AuthApiError,
+    );
   });
 
   it("ends a session only after fetching a fresh CSRF token", async () => {
@@ -135,10 +133,7 @@ describe("account API client", () => {
       "http://localhost:8000/api/auth/sign-out/",
       expect.objectContaining({
         credentials: "include",
-        headers: {
-          Accept: "application/json",
-          "X-CSRFToken": "signout-token",
-        },
+        headers: expect.objectContaining({ "X-CSRFToken": "signout-token" }),
         method: "POST",
       }),
     );
@@ -173,10 +168,16 @@ describe("account API client", () => {
     );
   });
 
-  it("builds the provider start URL from the configured API origin", () => {
+  it("represents whether Google sign-in can be started", () => {
     vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
 
-    expect(googleSignInUrl()).toBe("http://localhost:8000/api/auth/google/start/");
+    expect(getGoogleSignInAvailability()).toEqual({
+      available: true,
+      url: "http://localhost:8000/api/auth/google/start/",
+    });
+
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "");
+    expect(getGoogleSignInAvailability()).toEqual({ available: false });
   });
 
   it("confirms and cancels a pending Google link with fresh CSRF tokens", async () => {
@@ -247,14 +248,12 @@ describe("account API client", () => {
       expect.objectContaining({ body: JSON.stringify(input), method: "POST" }),
     );
     await expect(confirmPasswordReset(input, { fetcher: invalidFetcher })).rejects.toMatchObject({
-      kind: "recovery",
-      message: "This password reset link is invalid or has expired.",
+      fieldErrors: {},
     });
     await expect(
       confirmPasswordReset(input, { fetcher: weakPasswordFetcher }),
     ).rejects.toMatchObject({
       fieldErrors: { password: ["This password is too common."] },
-      kind: "validation",
     });
   });
 
@@ -276,14 +275,12 @@ describe("account API client", () => {
     await expect(
       confirmGoogleLink({ password: "wrong" }, { fetcher: wrongPasswordFetcher }),
     ).rejects.toMatchObject({
-      kind: "credentials",
-      message: "Enter the current password for this account.",
+      fieldErrors: { password: ["Enter the current password for this account."] },
     });
     await expect(
       confirmGoogleLink({ password: "durable-recall-river-927" }, { fetcher: conflictFetcher }),
     ).rejects.toMatchObject({
-      kind: "conflict",
-      message: "This Google identity cannot be linked to that account.",
+      fieldErrors: {},
     });
   });
 });

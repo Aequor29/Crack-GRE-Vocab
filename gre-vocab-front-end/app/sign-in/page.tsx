@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { AccountForm } from "@/components/auth/account-form";
-import type { GoogleSignInStatus } from "@/components/auth/google-sign-in-controls";
+import { readGoogleSignInStatus } from "@/lib/auth-page-query";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -11,21 +11,9 @@ type SignInPageProps = {
   searchParams: Promise<{ google?: string | string[] }>;
 };
 
-const googleStatuses = new Set<GoogleSignInStatus>([
-  "cancelled",
-  "conflict",
-  "link-required",
-  "provider-error",
-  "unavailable",
-]);
-
-function isGoogleSignInStatus(value: unknown): value is GoogleSignInStatus {
-  return typeof value === "string" && googleStatuses.has(value as GoogleSignInStatus);
-}
-
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const rawStatus = (await searchParams).google;
-  const status = isGoogleSignInStatus(rawStatus) ? rawStatus : undefined;
+  const status = readGoogleSignInStatus(rawStatus);
   return (
     <main
       className="mx-auto grid min-h-[calc(100svh-8rem)] max-w-6xl place-items-center px-5 py-16 sm:px-8"

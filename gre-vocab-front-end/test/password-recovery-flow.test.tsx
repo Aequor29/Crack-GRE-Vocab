@@ -93,7 +93,7 @@ describe("password recovery experience", () => {
 
   it("announces an expired or reused confirmation link", async () => {
     confirmPasswordResetMock.mockRejectedValue(
-      new AuthApiError("recovery", "This password reset link is invalid or has expired."),
+      new AuthApiError("This password reset link is invalid or has expired."),
     );
     render(<PasswordResetConfirmationForm token="expired-token" uid="opaque-uid" />);
 

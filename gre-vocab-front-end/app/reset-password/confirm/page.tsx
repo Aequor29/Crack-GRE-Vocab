@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { PasswordResetConfirmationForm } from "@/components/auth/password-recovery-form";
+import { readPasswordResetCredentials } from "@/lib/auth-page-query";
 
 export const metadata: Metadata = {
   title: "Choose a new password",
@@ -13,17 +14,11 @@ type PasswordResetConfirmationPageProps = {
   }>;
 };
 
-function firstSearchParameter(value: string | string[] | undefined): string | null {
-  if (Array.isArray(value)) {
-    return value[0] ?? null;
-  }
-  return value ?? null;
-}
-
 export default async function PasswordResetConfirmationPage({
   searchParams,
 }: PasswordResetConfirmationPageProps) {
   const parameters = await searchParams;
+  const credentials = readPasswordResetCredentials(parameters);
 
   return (
     <main
@@ -46,8 +41,8 @@ export default async function PasswordResetConfirmationPage({
           Completing this reset signs out every existing session for your account.
         </p>
         <PasswordResetConfirmationForm
-          token={firstSearchParameter(parameters.token)}
-          uid={firstSearchParameter(parameters.uid)}
+          token={credentials?.token ?? null}
+          uid={credentials?.uid ?? null}
         />
       </section>
     </main>

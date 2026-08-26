@@ -43,23 +43,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [status, setStatus] = useState<AuthStatus>("checking");
   const activeRequest = useRef<AbortController | null>(null);
-  const requestId = useRef(0);
 
   const refresh = useCallback(async () => {
     activeRequest.current?.abort();
     const controller = new AbortController();
-    const currentRequestId = ++requestId.current;
     activeRequest.current = controller;
     setStatus("checking");
 
     try {
       const restoredAccount = await getCurrentAccount({ signal: controller.signal });
-      if (!controller.signal.aborted && currentRequestId === requestId.current) {
+      if (!controller.signal.aborted) {
         setAccount(restoredAccount);
         setStatus(restoredAccount ? "authenticated" : "unauthenticated");
       }
     } catch {
-      if (!controller.signal.aborted && currentRequestId === requestId.current) {
+      if (!controller.signal.aborted) {
         setAccount(null);
         setStatus("unavailable");
       }

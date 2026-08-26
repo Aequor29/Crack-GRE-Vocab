@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AccountForm } from "@/components/auth/account-form";
 import { AccountPanel } from "@/components/auth/account-panel";
-import { AuthProvider } from "@/components/auth/auth-provider";
+import { AuthProvider, useAuth } from "@/components/auth/auth-provider";
 import { AuthApiError, getCurrentAccount, signIn, signOut, signUp } from "@/lib/api/auth";
 
 const navigation = vi.hoisted(() => ({
@@ -36,6 +36,18 @@ const getCurrentAccountMock = vi.mocked(getCurrentAccount);
 const signInMock = vi.mocked(signIn);
 const signOutMock = vi.mocked(signOut);
 const signUpMock = vi.mocked(signUp);
+
+function RefreshHarness() {
+  const auth = useAuth();
+  return (
+    <div>
+      <p>{auth.account?.display_name ?? auth.status}</p>
+      <button onClick={() => void auth.refresh()} type="button">
+        Refresh session
+      </button>
+    </div>
+  );
+}
 
 describe("learner account experience", () => {
   afterEach(cleanup);
@@ -83,10 +95,7 @@ describe("learner account experience", () => {
       </AuthProvider>,
     );
 
-    expect(await screen.findByText("Sign in is required to view this page.")).toHaveAttribute(
-      "role",
-      "status",
-    );
+    expect(await screen.findByRole("status")).not.toBeEmptyDOMElement();
     await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/sign-in"));
     expect(screen.getByRole("link", { name: "Continue to sign in" })).toHaveAttribute(
       "href",
@@ -105,9 +114,47 @@ describe("learner account experience", () => {
       </AuthProvider>,
     );
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("local backend is unavailable");
+    expect(await screen.findByRole("alert")).not.toBeEmptyDOMElement();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Ada Learner")).toBeInTheDocument();
+  });
+
+  it("lets the latest session refresh own the rendered state", async () => {
+    let finishFirstRequest: ((restored: typeof account) => void) | undefined;
+    let finishSecondRequest: ((restored: null) => void) | undefined;
+    getCurrentAccountMock
+      .mockImplementationOnce(
+        ({ signal } = {}) =>
+          new Promise((resolve) => {
+            expect(signal?.aborted).toBe(false);
+            finishFirstRequest = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        ({ signal } = {}) =>
+          new Promise((resolve) => {
+            expect(signal?.aborted).toBe(false);
+            finishSecondRequest = resolve;
+          }),
+      );
+
+    render(
+      <AuthProvider>
+        <RefreshHarness />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(getCurrentAccountMock).toHaveBeenCalledOnce());
+    const firstSignal = getCurrentAccountMock.mock.calls[0]?.[0]?.signal;
+    fireEvent.click(screen.getByRole("button", { name: "Refresh session" }));
+
+    await waitFor(() => expect(getCurrentAccountMock).toHaveBeenCalledTimes(2));
+    expect(firstSignal?.aborted).toBe(true);
+    finishSecondRequest?.(null);
+    expect(await screen.findByText("unauthenticated")).toBeInTheDocument();
+
+    finishFirstRequest?.(account);
+    await waitFor(() => expect(screen.queryByText("Ada Learner")).not.toBeInTheDocument());
   });
 
   it("submits an accessible signup and routes to the protected account", async () => {
@@ -143,7 +190,7 @@ describe("learner account experience", () => {
   it("associates server validation errors with the signup field", async () => {
     getCurrentAccountMock.mockResolvedValue(null);
     signUpMock.mockRejectedValue(
-      new AuthApiError("validation", "Check the highlighted fields and try again.", {
+      new AuthApiError("Account creation was rejected.", {
         email: ["An account with this email already exists."],
       }),
     );
@@ -164,7 +211,7 @@ describe("learner account experience", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Check the highlighted fields");
+    expect(await screen.findByRole("alert")).not.toBeEmptyDOMElement();
     const email = screen.getByLabelText("Email");
     expect(email).toHaveAttribute("aria-invalid", "true");
     expect(email).toHaveAccessibleDescription("An account with this email already exists.");

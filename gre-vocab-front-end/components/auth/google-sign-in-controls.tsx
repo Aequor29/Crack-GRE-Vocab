@@ -4,14 +4,8 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
-import { AuthApiError, googleSignInUrl } from "@/lib/api/auth";
-
-export type GoogleSignInStatus =
-  | "cancelled"
-  | "conflict"
-  | "link-required"
-  | "provider-error"
-  | "unavailable";
+import { AuthApiError, getGoogleSignInAvailability } from "@/lib/api/auth";
+import type { GoogleSignInStatus } from "@/lib/auth-page-query";
 
 type GoogleSignInControlsProps = {
   status?: GoogleSignInStatus;
@@ -30,14 +24,17 @@ const inputClassName =
 export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
   const auth = useAuth();
   const router = useRouter();
+  const googleSignIn = getGoogleSignInAvailability();
   const [linkCancelled, setLinkCancelled] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleConfirmation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     setFormError(null);
+    setPasswordError(null);
     setSubmitting(true);
     try {
       await auth.confirmGoogleLink({
@@ -46,11 +43,13 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
       router.replace("/account?google=connected");
       router.refresh();
     } catch (error) {
-      setFormError(
-        error instanceof AuthApiError
-          ? error.message
-          : "Google linking could not be completed. Please try again.",
-      );
+      if (error instanceof AuthApiError) {
+        const fieldError = error.fieldErrors.password?.join(" ") ?? null;
+        setPasswordError(fieldError);
+        setFormError(fieldError ? null : error.message);
+      } else {
+        setFormError("Google linking could not be completed. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -58,6 +57,7 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
 
   async function handleCancellation() {
     setFormError(null);
+    setPasswordError(null);
     setSubmitting(true);
     try {
       await auth.cancelGoogleLink();
@@ -84,8 +84,8 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
             Current password
           </label>
           <input
-            aria-describedby={formError ? "google-link-error" : undefined}
-            aria-invalid={Boolean(formError)}
+            aria-describedby={passwordError ? "google-link-password-error" : undefined}
+            aria-invalid={Boolean(passwordError)}
             autoComplete="current-password"
             className={inputClassName}
             disabled={submitting}
@@ -94,6 +94,14 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
             required
             type="password"
           />
+          {passwordError ? (
+            <p
+              className="mt-2 text-sm font-medium text-rose-700 dark:text-rose-300"
+              id="google-link-password-error"
+            >
+              {passwordError}
+            </p>
+          ) : null}
         </div>
         {formError ? (
           <p
@@ -129,8 +137,14 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
     ? "Google linking was cancelled. No account changes were made."
     : status
       ? providerMessages[status]
-      : null;
-  const messageRole = linkCancelled || status === "cancelled" ? "status" : "alert";
+      : googleSignIn.available
+        ? null
+        : "Google sign-in is unavailable until the local API configuration is complete.";
+  const messageRole =
+    linkCancelled || status === "cancelled" || (!status && !googleSignIn.available)
+      ? "status"
+      : "alert";
+  const googleActionAvailable = googleSignIn.available && status !== "unavailable";
 
   return (
     <div className="space-y-4">
@@ -144,13 +158,24 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
           {message}
         </p>
       ) : null}
-      <a
-        className="flex w-full items-center justify-center gap-3 rounded-full border border-foreground/20 px-6 py-3 font-bold transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        href={googleSignInUrl()}
-      >
-        <span aria-hidden="true">G</span>
-        Continue with Google
-      </a>
+      {googleActionAvailable ? (
+        <a
+          className="flex w-full items-center justify-center gap-3 rounded-full border border-foreground/20 px-6 py-3 font-bold transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          href={googleSignIn.url}
+        >
+          <span aria-hidden="true">G</span>
+          Continue with Google
+        </a>
+      ) : (
+        <button
+          className="flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-full border border-foreground/20 px-6 py-3 font-bold opacity-55"
+          disabled
+          type="button"
+        >
+          <span aria-hidden="true">G</span>
+          Continue with Google
+        </button>
+      )}
     </div>
   );
 }

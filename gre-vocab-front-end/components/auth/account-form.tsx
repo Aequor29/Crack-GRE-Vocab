@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
-import {
-  GoogleSignInControls,
-  type GoogleSignInStatus,
-} from "@/components/auth/google-sign-in-controls";
+import { GoogleSignInControls } from "@/components/auth/google-sign-in-controls";
 import { AuthApiError, type AuthFieldErrors } from "@/lib/api/auth";
+import type { GoogleSignInStatus } from "@/lib/auth-page-query";
 
 type AccountFormProps = {
   googleStatus?: GoogleSignInStatus;
