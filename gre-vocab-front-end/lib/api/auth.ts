@@ -39,23 +39,14 @@ export type SignUpInput = SignUpRequest;
 export type PasswordResetConfirmInput = PasswordResetConfirmRequest;
 export type PasswordResetStartInput = PasswordResetStartRequest;
 export type AuthFieldErrors = AuthValidationError;
-export type AuthErrorKind =
-  | "conflict"
-  | "credentials"
-  | "csrf"
-  | "recovery"
-  | "unauthenticated"
-  | "unavailable"
-  | "validation";
+export type GoogleSignInAvailability = { available: true; url: string } | { available: false };
 
 export class AuthApiError extends Error {
   readonly fieldErrors: AuthFieldErrors;
-  readonly kind: AuthErrorKind;
 
-  constructor(kind: AuthErrorKind, message: string, fieldErrors: AuthFieldErrors = {}) {
+  constructor(message: string, fieldErrors: AuthFieldErrors = {}) {
     super(message);
     this.name = "AuthApiError";
-    this.kind = kind;
     this.fieldErrors = fieldErrors;
   }
 }
@@ -115,7 +106,6 @@ function readApiMessage(value: unknown): string | null {
 
 function unavailableError(): AuthApiError {
   return new AuthApiError(
-    "unavailable",
     "The local backend is unavailable. Start Django and PostgreSQL, then try again.",
   );
 }
@@ -124,7 +114,6 @@ function throwAuthTransportError(error: unknown): never {
   if (error instanceof ApiTransportError) {
     if (error.kind === "configuration") {
       throw new AuthApiError(
-        "unavailable",
         "The local API is not configured. Check NEXT_PUBLIC_API_BASE_URL and try again.",
       );
     }
@@ -167,20 +156,16 @@ async function mutateAccount(
     return payload;
   }
   if (response.status === 400) {
-    throw new AuthApiError(
-      "validation",
-      "Check the highlighted fields and try again.",
-      readFieldErrors(payload),
-    );
+    throw new AuthApiError("Check the highlighted fields and try again.", readFieldErrors(payload));
   }
   if (response.status === 401) {
-    throw new AuthApiError("credentials", "Email or password is incorrect.");
+    throw new AuthApiError("Email or password is incorrect.");
   }
   if (response.status === 403) {
-    throw new AuthApiError("csrf", "Your form expired. Please try again.");
+    throw new AuthApiError("Your form expired. Please try again.");
   }
   if (response.status === 415) {
-    throw new AuthApiError("unavailable", "The account request format was rejected.");
+    throw new AuthApiError("The account request format was rejected.");
   }
   throw unavailableError();
 }
@@ -197,19 +182,15 @@ async function submitPasswordRecoveryRequest(
   }
   if (response.status === 400) {
     if (isApiMessage(payload)) {
-      throw new AuthApiError("recovery", payload.detail);
+      throw new AuthApiError(payload.detail);
     }
-    throw new AuthApiError(
-      "validation",
-      "Check the highlighted fields and try again.",
-      readFieldErrors(payload),
-    );
+    throw new AuthApiError("Check the highlighted fields and try again.", readFieldErrors(payload));
   }
   if (response.status === 403) {
-    throw new AuthApiError("csrf", "Your form expired. Please try again.");
+    throw new AuthApiError("Your form expired. Please try again.");
   }
   if (response.status === 415) {
-    throw new AuthApiError("unavailable", "The recovery request format was rejected.");
+    throw new AuthApiError("The recovery request format was rejected.");
   }
   throw unavailableError();
 }
@@ -247,14 +228,14 @@ export function confirmPasswordReset(
   return submitPasswordRecoveryRequest(AUTH_PATHS.passwordResetConfirm, input, 200, options);
 }
 
-export function googleSignInUrl(): string {
+export function getGoogleSignInAvailability(): GoogleSignInAvailability {
   try {
-    return buildApiUrl(GOOGLE_START_PATH);
+    return { available: true, url: buildApiUrl(GOOGLE_START_PATH) };
   } catch (error) {
     if (!(error instanceof ApiTransportError)) {
       throw error;
     }
-    return "#google-sign-in-unavailable";
+    return { available: false };
   }
 }
 
@@ -274,28 +255,24 @@ export async function confirmGoogleLink(
   const message = readApiMessage(payload);
   if (response.status === 400) {
     throw new AuthApiError(
-      "validation",
       message ?? "Start Google sign-in again before linking.",
       readFieldErrors(payload),
     );
   }
   if (response.status === 401) {
-    throw new AuthApiError(
-      "credentials",
-      message ?? "Enter the current password for this account.",
-    );
+    const passwordMessage = message ?? "Enter the current password for this account.";
+    throw new AuthApiError(passwordMessage, {
+      password: [passwordMessage],
+    });
   }
   if (response.status === 403) {
-    throw new AuthApiError("csrf", "Your form expired. Please try again.");
+    throw new AuthApiError("Your form expired. Please try again.");
   }
   if (response.status === 409) {
-    throw new AuthApiError(
-      "conflict",
-      message ?? "This Google identity cannot be linked to that account.",
-    );
+    throw new AuthApiError(message ?? "This Google identity cannot be linked to that account.");
   }
   if (response.status === 415) {
-    throw new AuthApiError("unavailable", "The Google link request format was rejected.");
+    throw new AuthApiError("The Google link request format was rejected.");
   }
   throw unavailableError();
 }
@@ -306,7 +283,7 @@ export async function cancelGoogleLink(options: AuthRequestOptions = {}): Promis
     return;
   }
   if (response.status === 403) {
-    throw new AuthApiError("csrf", "Your form expired. Please try again.");
+    throw new AuthApiError("Your form expired. Please try again.");
   }
   throw unavailableError();
 }
@@ -317,7 +294,7 @@ export async function signOut(options: AuthRequestOptions = {}): Promise<void> {
     return;
   }
   if (response.status === 403) {
-    throw new AuthApiError("csrf", "Your form expired. Please try again.");
+    throw new AuthApiError("Your form expired. Please try again.");
   }
   throw unavailableError();
 }

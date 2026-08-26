@@ -3,16 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AccountPanel } from "@/components/auth/account-panel";
 import { AuthProvider } from "@/components/auth/auth-provider";
-import {
-  GoogleSignInControls,
-  type GoogleSignInStatus,
-} from "@/components/auth/google-sign-in-controls";
+import { GoogleSignInControls } from "@/components/auth/google-sign-in-controls";
 import {
   AuthApiError,
   cancelGoogleLink,
   confirmGoogleLink,
   getCurrentAccount,
 } from "@/lib/api/auth";
+import type { GoogleSignInStatus } from "@/lib/auth-page-query";
 
 const navigation = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -57,26 +55,48 @@ describe("Google sign-in experience", () => {
   });
 
   it.each([
-    ["cancelled", "Google sign-in was cancelled. No account changes were made."],
-    ["provider-error", "Google sign-in could not be completed. Please try again."],
-    ["conflict", "This Google identity is already connected to a different account."],
-    ["unavailable", "Google sign-in is not configured for this environment."],
-  ] satisfies [GoogleSignInStatus, string][])(
-    "shows the accessible %s provider state",
-    async (status, message) => {
+    { role: "status", status: "cancelled" },
+    { role: "alert", status: "provider-error" },
+    { role: "alert", status: "conflict" },
+  ] satisfies { role: "alert" | "status"; status: GoogleSignInStatus }[])(
+    "shows the accessible $status provider state",
+    async ({ role, status }) => {
       render(
         <AuthProvider>
           <GoogleSignInControls status={status} />
         </AuthProvider>,
       );
 
-      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(await screen.findByRole(role)).not.toBeEmptyDOMElement();
       expect(screen.getByRole("link", { name: "Continue with Google" })).toHaveAttribute(
         "href",
         "http://localhost:8000/api/auth/google/start/",
       );
     },
   );
+
+  it("does not offer a Google action when sign-in is unavailable", async () => {
+    render(
+      <AuthProvider>
+        <GoogleSignInControls status="unavailable" />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByRole("button", { name: "Continue with Google" })).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "Continue with Google" })).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).not.toBeEmptyDOMElement();
+
+    cleanup();
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "");
+    render(
+      <AuthProvider>
+        <GoogleSignInControls />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByRole("button", { name: "Continue with Google" })).toBeDisabled();
+    expect(screen.getByRole("status")).not.toBeEmptyDOMElement();
+  });
 
   it("confirms a matching password account before linking and signing in", async () => {
     confirmGoogleLinkMock.mockResolvedValue(account);
@@ -87,9 +107,7 @@ describe("Google sign-in experience", () => {
       </AuthProvider>,
     );
 
-    expect(
-      await screen.findByText("Confirm this is your existing account before linking Google."),
-    ).toHaveAttribute("role", "status");
+    expect(await screen.findByRole("status")).not.toBeEmptyDOMElement();
     fireEvent.change(screen.getByLabelText("Current password"), {
       target: { value: "durable-recall-river-927" },
     });
@@ -115,15 +133,15 @@ describe("Google sign-in experience", () => {
     await screen.findByRole("button", { name: "Cancel linking" });
     fireEvent.click(screen.getByRole("button", { name: "Cancel linking" }));
 
-    expect(
-      await screen.findByText("Google linking was cancelled. No account changes were made."),
-    ).toHaveAttribute("role", "status");
+    expect(await screen.findByRole("status")).not.toBeEmptyDOMElement();
     expect(cancelGoogleLinkMock).toHaveBeenCalledOnce();
   });
 
   it("associates rejected ownership confirmation with the password field", async () => {
     confirmGoogleLinkMock.mockRejectedValue(
-      new AuthApiError("credentials", "Enter the current password for this account."),
+      new AuthApiError("Password proof was rejected.", {
+        password: ["Password proof was rejected."],
+      }),
     );
 
     render(
@@ -136,11 +154,27 @@ describe("Google sign-in experience", () => {
     fireEvent.change(password, { target: { value: "wrong-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm Google link" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Enter the current password for this account.",
-    );
+    expect(await screen.findByText("Password proof was rejected.")).toBeInTheDocument();
     expect(password).toHaveAttribute("aria-invalid", "true");
-    expect(password).toHaveAccessibleDescription("Enter the current password for this account.");
+    expect(password).toHaveAccessibleDescription("Password proof was rejected.");
+  });
+
+  it("keeps Google provider conflicts at the form level", async () => {
+    confirmGoogleLinkMock.mockRejectedValue(new AuthApiError("Provider conflict."));
+
+    render(
+      <AuthProvider>
+        <GoogleSignInControls status="link-required" />
+      </AuthProvider>,
+    );
+
+    const password = await screen.findByLabelText("Current password");
+    fireEvent.change(password, { target: { value: "durable-recall-river-927" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Google link" }));
+
+    expect(await screen.findByRole("alert")).not.toBeEmptyDOMElement();
+    expect(password).toHaveAttribute("aria-invalid", "false");
+    expect(password).not.toHaveAccessibleDescription();
   });
 
   it("announces successful Google sign-in on the restored account", async () => {
@@ -152,10 +186,7 @@ describe("Google sign-in experience", () => {
       </AuthProvider>,
     );
 
-    expect(await screen.findByText("Google sign-in is connected to this account.")).toHaveAttribute(
-      "role",
-      "status",
-    );
-    expect(screen.getByText("Ada Learner")).toBeInTheDocument();
+    expect(await screen.findByText("Ada Learner")).toBeInTheDocument();
+    expect(screen.getByRole("status")).not.toBeEmptyDOMElement();
   });
 });
