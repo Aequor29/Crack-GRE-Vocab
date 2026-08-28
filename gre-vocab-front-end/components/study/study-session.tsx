@@ -237,7 +237,7 @@ export function StudySession() {
     return (
       <div className="space-y-5">
         <p className="text-foreground/70" role="alert">
-          The local backend is unavailable, so your learner session could not be restored.
+          We couldn&apos;t load your study progress. Please try again.
         </p>
         <Button onPress={() => void auth.refresh()} variant="primary">
           Try again
@@ -249,7 +249,7 @@ export function StudySession() {
   if (auth.status === "checking" || loading) {
     return (
       <p aria-live="polite" className="text-foreground/70" role="status">
-        Restoring your study session…
+        Loading your study progress…
       </p>
     );
   }
@@ -341,8 +341,7 @@ export function StudySession() {
         <div role="alert">
           <h2 className="text-3xl font-black tracking-tight">Study session needs attention</h2>
           <p className="mx-auto mt-4 max-w-xl text-foreground/65">
-            The active session has no current card. Reload its authoritative progress before
-            continuing.
+            We couldn&apos;t find your next card. Reload your study progress to continue.
           </p>
         </div>
         <Button onPress={() => void restoreStudyProgress()} variant="primary">

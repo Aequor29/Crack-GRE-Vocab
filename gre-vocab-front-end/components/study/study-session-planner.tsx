@@ -24,8 +24,8 @@ export function StudySessionPlanner({
       <div>
         <h2 className="text-2xl font-black tracking-tight">Start a focused session</h2>
         <p className="mt-2 max-w-2xl text-foreground/65">
-          Due reviews come first. The backend then adds up to your chosen number of new words, with
-          a hard limit of 30 cards per sitting.
+          Due reviews come first. We&apos;ll then add up to your chosen number of new words, with a
+          limit of 30 cards per sitting.
         </p>
         <p className="mt-4 max-w-2xl border-l-2 border-accent pl-4 text-sm leading-6 text-foreground/65">
           Recall each word first, reveal its meaning, then grade yourself honestly as Remembered or

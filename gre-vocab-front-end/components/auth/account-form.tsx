@@ -36,7 +36,7 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
   if (auth.status === "checking") {
     return (
       <p aria-live="polite" className="text-sm text-foreground/70" role="status">
-        Restoring your session…
+        Checking your account…
       </p>
     );
   }
@@ -108,8 +108,7 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
 
       {auth.status === "unavailable" ? (
         <p className="rounded-2xl bg-amber-500/10 p-4 text-sm text-foreground" role="status">
-          The local backend was unavailable during session restoration. You can retry by submitting
-          the form.
+          We couldn&apos;t connect. You can still try submitting the form again.
         </p>
       ) : null}
 

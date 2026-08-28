@@ -147,24 +147,14 @@ export class StudyApiError extends Error {
 
 export type StudyRequestOptions = ApiRequestOptions;
 
-function createStudyUnavailableError(message = "The local backend is unavailable."): StudyApiError {
-  return new StudyApiError(
-    "unavailable",
-    `${message} Try again when Django and PostgreSQL are ready.`,
-    {
-      retryable: true,
-    },
-  );
+function createStudyUnavailableError(): StudyApiError {
+  return new StudyApiError("unavailable", "Study is temporarily unavailable. Please try again.", {
+    retryable: true,
+  });
 }
 
 function throwStudyTransportError(error: unknown): never {
   if (error instanceof ApiTransportError) {
-    if (error.kind === "configuration") {
-      throw createStudyUnavailableError("The local API is not configured.");
-    }
-    if (error.kind === "csrf-token") {
-      throw createStudyUnavailableError("A fresh form token could not be obtained.");
-    }
     throw createStudyUnavailableError();
   }
   throw error;

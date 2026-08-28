@@ -88,12 +88,12 @@ describe("study session experience", () => {
     submitRecallAnswerMock.mockReset();
   });
 
-  it("shows backend recovery when authentication cannot be checked", async () => {
+  it("offers recovery when the learner account cannot be checked", async () => {
     auth.status = "unavailable";
 
     render(<StudySession />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent("backend is unavailable");
+    expect(screen.getByRole("alert")).toHaveTextContent("couldn't load your study progress");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(auth.refresh).toHaveBeenCalledTimes(1));
     expect(getActiveStudySessionMock).not.toHaveBeenCalled();
