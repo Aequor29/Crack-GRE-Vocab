@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { StudyAnswerResponse, StudySession } from "@/lib/api/generated/schema.generated";
 import {
   createStudySession,
   getActiveStudySession,
@@ -12,67 +11,26 @@ import {
   loadPendingAnswer,
   savePendingAnswer,
 } from "@/lib/study/pending-answer";
+import {
+  buildCompletedStudySession,
+  buildStudyAnswerResponse,
+  buildStudyItem,
+  buildStudySession,
+} from "@/test/study-builders";
 
-const item = {
-  id: "00000000-0000-4000-8000-000000000001",
-  kind: "new" as const,
-  position: 1,
-  pronunciation: "/abate/",
-  senses: [
-    {
-      definition: "To become less intense.",
-      example: "The storm began to abate.",
-      part_of_speech: "verb",
-      position: 1,
-    },
-  ],
-  term: "abate",
-  word_id: "00000000-0000-4000-8000-000000000002",
-};
+const item = buildStudyItem();
 
-const session: StudySession = {
-  answered_count: 0,
-  corpus_version: "m1-v1",
-  created_at: "2026-08-07T05:00:00Z",
+const session = buildStudySession({
   current_item: item,
-  id: "00000000-0000-4000-8000-000000000003",
-  item_count: 1,
   items: [item],
-  new_word_target: 1,
-  planned_new_word_count: 1,
-  planner_version: "m1-due-first-v1",
-  remaining_count: 1,
-  status: "active",
-};
+});
 
-const answerResponse: StudyAnswerResponse = {
-  answer: {
-    accepted_at: "2026-08-07T05:01:00Z",
-    client_request_id: "00000000-0000-4000-8000-000000000004",
-    id: "00000000-0000-4000-8000-000000000005",
-    item_id: item.id,
-    rating: "remembered",
-    submitted_at: "2026-08-07T05:01:00Z",
-  },
-  outcome: {
-    id: "00000000-0000-4000-8000-000000000006",
-    next_due_at: "2026-08-07T05:11:00Z",
-    next_phase: "learning",
-    occurred_at: "2026-08-07T05:01:00Z",
-    previous_phase: "",
-    review_number: 1,
-    scheduler_version: "m1-fsrs-6.3.1-binary-v1",
-  },
-  replayed: false,
-  session: {
-    ...session,
-    answered_count: 1,
-    current_item: null,
-    ended_at: "2026-08-07T05:01:00Z",
-    remaining_count: 0,
-    status: "completed",
-  },
-};
+const answerResponse = buildStudyAnswerResponse(
+  buildCompletedStudySession({
+    items: [item],
+    planned_new_word_count: 1,
+  }),
+);
 
 const jsonResponse = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), {
@@ -115,6 +73,47 @@ describe("study API client", () => {
     await expect(getActiveStudySession({ fetcher })).rejects.toMatchObject({
       kind: "unavailable",
     } satisfies Partial<StudyApiError>);
+  });
+
+  it.each([
+    {
+      label: "the current example",
+      payload: {
+        ...answerResponse,
+        session: {
+          ...answerResponse.session,
+          current_item: {
+            ...item,
+            senses: [{ ...item.senses[0], example: null }],
+          },
+        },
+      },
+    },
+    {
+      label: "the scheduling outcome",
+      payload: {
+        ...answerResponse,
+        outcome: { ...answerResponse.outcome, next_due_at: null },
+      },
+    },
+  ])("rejects an answer response with malformed $label", async ({ payload }) => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: "answer-token" }, 200))
+      .mockResolvedValueOnce(jsonResponse(payload, 201));
+
+    await expect(
+      submitRecallAnswer(
+        {
+          client_request_id: "00000000-0000-4000-8000-000000000004",
+          itemId: item.id,
+          rating: "remembered",
+          sessionId: session.id,
+        },
+        { fetcher },
+      ),
+    ).rejects.toMatchObject({ kind: "unavailable" } satisfies Partial<StudyApiError>);
   });
 
   it("creates a session only after obtaining a fresh CSRF token", async () => {
@@ -203,6 +202,40 @@ describe("study API client", () => {
       retryable: true,
     } satisfies Partial<StudyApiError>);
   });
+
+  it.each([
+    {
+      code: "study_item_out_of_order",
+      expectedKind: "conflict",
+      expectedRetryable: false,
+      status: 409,
+    },
+    {
+      code: "study_temporarily_unavailable",
+      expectedKind: "unavailable",
+      expectedRetryable: true,
+      status: 503,
+    },
+  ] as const)(
+    "maps $code without exposing backend prose",
+    async ({ code, expectedKind, expectedRetryable, status }) => {
+      vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(jsonResponse({ csrf_token: "error-token" }, 200))
+        .mockResolvedValueOnce(
+          jsonResponse({ code, detail: "Framework wording changed.", retryable: true }, status),
+        );
+
+      const request = createStudySession(1, { fetcher });
+      await expect(request).rejects.toMatchObject({
+        code,
+        kind: expectedKind,
+        retryable: expectedRetryable,
+      } satisfies Partial<StudyApiError>);
+      await expect(request).rejects.not.toMatchObject({ message: "Framework wording changed." });
+    },
+  );
 
   it("keeps only a valid versioned pending answer for the current learner", () => {
     const input = {

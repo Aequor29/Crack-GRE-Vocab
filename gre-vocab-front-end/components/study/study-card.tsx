@@ -57,41 +57,39 @@ export function StudyCard({
         />
       </div>
 
-      <article className="min-h-80 rounded-[2rem] border border-black/10 bg-background/70 p-7 text-center dark:border-white/10 sm:p-12">
-        <h2
-          className="text-5xl font-black tracking-[-0.05em] outline-none sm:text-7xl"
-          ref={termHeading}
-          tabIndex={-1}
-        >
-          {item.term}
-        </h2>
-        {item.pronunciation ? (
-          <p className="mt-3 text-lg text-foreground/50">{item.pronunciation}</p>
-        ) : null}
+      <article className="rounded-[2rem] border border-black/10 bg-background/70 p-7 text-center dark:border-white/10 sm:p-12">
+        <div className={revealed ? undefined : "grid min-h-64 content-center"}>
+          <h2
+            className="text-5xl font-black tracking-[-0.05em] outline-none sm:text-7xl"
+            ref={termHeading}
+            tabIndex={-1}
+          >
+            {item.term}
+          </h2>
+          {item.pronunciation ? (
+            <p className="mt-3 text-lg text-foreground/50">{item.pronunciation}</p>
+          ) : null}
+        </div>
 
         {revealed ? (
           <div className="mx-auto mt-10 max-w-2xl space-y-8 border-t border-black/10 pt-8 text-left dark:border-white/10">
             {item.senses.map((sense) => (
               <div className="space-y-3" key={`${sense.position}-${sense.definition}`}>
-                <p className="text-xl font-semibold leading-8 sm:text-2xl sm:leading-9">
+                <p className="text-2xl font-semibold leading-9 sm:text-3xl sm:leading-10">
                   <span className="mr-3 text-sm italic text-foreground/55">
                     {sense.part_of_speech}
                   </span>
                   {sense.definition}
                 </p>
                 {sense.example ? (
-                  <p className="text-base italic leading-7 text-foreground/70 sm:text-lg sm:leading-8">
+                  <p className="text-lg italic leading-8 text-foreground/70 sm:text-xl sm:leading-9">
                     “{sense.example}”
                   </p>
                 ) : null}
               </div>
             ))}
           </div>
-        ) : (
-          <p className="mx-auto mt-10 max-w-md text-base leading-7 text-foreground/60">
-            Say the meaning to yourself before revealing the answer.
-          </p>
-        )}
+        ) : null}
       </article>
 
       {notice ? (

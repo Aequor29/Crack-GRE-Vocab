@@ -42,6 +42,85 @@ export type StudyErrorKind =
   | "unavailable"
   | "validation";
 
+type StudyErrorDefinition = {
+  kind: StudyErrorKind;
+  message: string;
+  retryable: boolean;
+};
+
+const studyErrorsByCode = {
+  authentication_required: {
+    kind: "unauthenticated",
+    message: "Your sign-in expired. Sign in again to continue.",
+    retryable: false,
+  },
+  csrf_failed: {
+    kind: "csrf",
+    message: "Your study request expired. Please try again.",
+    retryable: true,
+  },
+  invalid_json: {
+    kind: "validation",
+    message: "The study request was not valid.",
+    retryable: false,
+  },
+  study_corpus_unavailable: {
+    kind: "conflict",
+    message: "No vocabulary corpus is currently available for study.",
+    retryable: false,
+  },
+  study_item_already_answered: {
+    kind: "conflict",
+    message: "This card was already answered. Reloading your progress is safe.",
+    retryable: false,
+  },
+  study_item_not_found: {
+    kind: "not-found",
+    message: "This study card is no longer available. Reloading your progress is safe.",
+    retryable: false,
+  },
+  study_item_out_of_order: {
+    kind: "conflict",
+    message: "Your study session advanced elsewhere. Reloading it is safe.",
+    retryable: false,
+  },
+  study_no_eligible_items: {
+    kind: "conflict",
+    message: "No vocabulary items are ready for a new study session.",
+    retryable: false,
+  },
+  study_request_id_reused: {
+    kind: "conflict",
+    message: "This saved answer no longer matches your study progress.",
+    retryable: false,
+  },
+  study_session_inactive: {
+    kind: "conflict",
+    message: "This study session is no longer active. Reloading your progress is safe.",
+    retryable: false,
+  },
+  study_session_not_found: {
+    kind: "not-found",
+    message: "No active study session exists.",
+    retryable: false,
+  },
+  study_temporarily_unavailable: {
+    kind: "unavailable",
+    message: "Study is temporarily unavailable. Please try again.",
+    retryable: true,
+  },
+  unsupported_media_type: {
+    kind: "validation",
+    message: "The study request format was not supported.",
+    retryable: false,
+  },
+  validation_error: {
+    kind: "validation",
+    message: "Check the study request and try again.",
+    retryable: false,
+  },
+} as const satisfies Record<string, StudyErrorDefinition>;
+
 export class StudyApiError extends Error {
   readonly code: string | null;
   readonly currentItemId: string | null;
@@ -230,36 +309,54 @@ function parseStudyErrorPayload(payload: unknown): Partial<StudyPlanningError> {
 
 function createStudyErrorFromResponse(response: Response, payload: unknown): StudyApiError {
   const error = parseStudyErrorPayload(payload);
-  const detail = isString(error.detail)
-    ? error.detail
-    : "The study request could not be completed.";
   const code = isString(error.code) ? error.code : null;
   const currentItemId = isString(error.current_item_id) ? error.current_item_id : null;
+  const definition =
+    code && Object.hasOwn(studyErrorsByCode, code)
+      ? studyErrorsByCode[code as keyof typeof studyErrorsByCode]
+      : undefined;
+  if (definition) {
+    return new StudyApiError(definition.kind, definition.message, {
+      code,
+      currentItemId,
+      retryable: definition.retryable,
+    });
+  }
   if (response.status === 400) {
-    return new StudyApiError("validation", detail);
+    return new StudyApiError("validation", "The study request was not valid.", { code });
   }
   if (response.status === 401) {
-    return new StudyApiError("unauthenticated", "Your sign-in expired. Sign in again to continue.");
+    return new StudyApiError(
+      "unauthenticated",
+      "Your sign-in expired. Sign in again to continue.",
+      {
+        code,
+      },
+    );
   }
   if (response.status === 403) {
-    if (error.code === "csrf_failed") {
-      return new StudyApiError("csrf", "Your study request expired. Please try again.", {
-        retryable: true,
-      });
-    }
-    return new StudyApiError("unauthenticated", "Your sign-in expired. Sign in again to continue.");
+    return new StudyApiError(
+      "unauthenticated",
+      "Your sign-in expired. Sign in again to continue.",
+      {
+        code,
+      },
+    );
   }
   if (response.status === 404) {
-    return new StudyApiError("not-found", detail, { code });
+    return new StudyApiError("not-found", "The requested study progress was not found.", { code });
   }
   if (response.status === 409) {
-    return new StudyApiError("conflict", detail, {
+    return new StudyApiError("conflict", "Your study progress changed. Reload it and try again.", {
       code,
       currentItemId,
     });
   }
   if (response.status === 503) {
-    return createStudyUnavailableError(detail);
+    return new StudyApiError("unavailable", "Study is temporarily unavailable. Please try again.", {
+      code,
+      retryable: true,
+    });
   }
   return createStudyUnavailableError();
 }
