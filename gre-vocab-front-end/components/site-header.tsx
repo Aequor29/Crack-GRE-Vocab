@@ -1,12 +1,10 @@
 import Link from "next/link";
 
-import { AuthNavigation } from "@/components/auth/auth-navigation";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 
 const navigation = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/study", label: "Study" },
-  { href: "/#status", label: "Rebuild status" },
-  { href: "/#principles", label: "Principles" },
 ] as const;
 
 export function SiteHeader() {
@@ -16,7 +14,7 @@ export function SiteHeader() {
         <Link
           aria-label="Crack GRE Vocab home"
           className="group inline-flex items-center gap-3 rounded-xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background"
-          href="/"
+          href="/dashboard"
         >
           <span
             aria-hidden="true"
@@ -30,9 +28,9 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-1 sm:gap-2">
           <nav aria-label="Primary" className="flex items-center gap-1">
-            {navigation.map((item, index) => (
+            {navigation.map((item) => (
               <Link
-                className={`rounded-full px-3 py-2 text-sm font-medium text-foreground/70 transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${index > 0 ? "hidden md:inline-flex" : "inline-flex"}`}
+                className="inline-flex rounded-full px-3 py-2 text-sm font-medium text-foreground/70 transition-colors hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 href={item.href}
                 key={item.href}
               >
@@ -40,7 +38,6 @@ export function SiteHeader() {
               </Link>
             ))}
           </nav>
-          <AuthNavigation />
           <ThemeSwitcher />
         </div>
       </div>

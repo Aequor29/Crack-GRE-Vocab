@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@heroui/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -294,11 +295,19 @@ export function StudySession() {
 
   if (session.status === "completed") {
     return (
-      <div className="py-10 text-center" role="status">
-        <h2 className="text-4xl font-black tracking-tight">Session complete</h2>
-        <p className="mx-auto mt-4 max-w-xl text-foreground/65">
-          You finished all {session.item_count} cards. Come back when your next reviews are ready.
-        </p>
+      <div className="space-y-6 py-10 text-center">
+        <div role="status">
+          <h2 className="text-4xl font-black tracking-tight">Session complete</h2>
+          <p className="mx-auto mt-4 max-w-xl text-foreground/65">
+            You finished all {session.item_count} cards. Come back when your next reviews are ready.
+          </p>
+        </div>
+        <Link
+          className="inline-flex rounded-full bg-accent px-6 py-3 font-bold text-accent-foreground shadow-lg shadow-accent/15 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background motion-reduce:transform-none"
+          href="/dashboard"
+        >
+          Back to dashboard
+        </Link>
       </div>
     );
   }

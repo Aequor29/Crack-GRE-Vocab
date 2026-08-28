@@ -299,6 +299,10 @@ describe("study session experience", () => {
     render(<StudySession />);
 
     expect(await screen.findByRole("heading", { name: "Session complete" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to dashboard" })).toHaveAttribute(
+      "href",
+      "/dashboard",
+    );
   });
 
   it("lets the learner leave an abandoned session and plan another", async () => {

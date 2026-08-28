@@ -45,8 +45,11 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
     return (
       <div className="space-y-4">
         <p className="text-foreground/70">You are already signed in.</p>
-        <Link className="font-bold text-accent underline-offset-4 hover:underline" href="/account">
-          Go to your account
+        <Link
+          className="font-bold text-accent underline-offset-4 hover:underline"
+          href="/dashboard"
+        >
+          Go to your dashboard
         </Link>
       </div>
     );
@@ -75,7 +78,7 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
       } else {
         await auth.signIn({ email, password });
       }
-      router.replace("/account");
+      router.replace("/dashboard");
       router.refresh();
     } catch (error) {
       if (error instanceof AuthApiError) {

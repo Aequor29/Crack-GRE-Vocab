@@ -61,7 +61,7 @@ describe("rendered authentication boundary", () => {
     });
     fireEvent.click(submit);
 
-    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/account"));
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/dashboard"));
     expect(screen.getByText("You are already signed in.")).toBeInTheDocument();
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
