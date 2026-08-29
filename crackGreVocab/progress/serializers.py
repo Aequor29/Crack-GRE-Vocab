@@ -3,7 +3,6 @@
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rest_framework import serializers
-from study.models import RecallAnswer, SchedulingPhase
 
 
 class ProgressTimezoneQuerySerializer(serializers.Serializer):
@@ -44,20 +43,10 @@ class TodayProgressSerializer(serializers.Serializer):
     forgot = serializers.IntegerField(min_value=0)
 
 
-class RecentRecallOutcomeSerializer(serializers.Serializer):
-    word_id = serializers.UUIDField()
-    term = serializers.CharField()
-    rating = serializers.ChoiceField(choices=RecallAnswer.Rating.choices)
-    phase = serializers.ChoiceField(choices=SchedulingPhase.choices)
-    next_due_at = serializers.DateTimeField()
-    occurred_at = serializers.DateTimeField()
-
-
 class LearningProgressSummarySerializer(serializers.Serializer):
     corpus = CorpusProgressSerializer()
     actionable = ActionableProgressSerializer()
     today = TodayProgressSerializer()
-    recent_outcomes = RecentRecallOutcomeSerializer(many=True)
 
 
 class ProgressErrorSerializer(serializers.Serializer):

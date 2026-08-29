@@ -37,16 +37,6 @@ const progress: LearningProgressSummary = {
     remembered: 6,
     forgot: 2,
   },
-  recent_outcomes: [
-    {
-      word_id: "00000000-0000-4000-8000-000000000001",
-      term: "abate",
-      rating: "remembered",
-      phase: "learning",
-      next_due_at: "2026-08-28T18:10:00Z",
-      occurred_at: "2026-08-28T18:00:00Z",
-    },
-  ],
 };
 
 vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
@@ -68,14 +58,14 @@ describe("dashboard shell", () => {
     progressApi.getLearningProgress.mockResolvedValue(progress);
   });
 
-  it("shows actionable coverage, today's work, and recent recall", async () => {
+  it("shows actionable coverage and today's work without recall clutter", async () => {
     render(<DashboardShell />);
 
     expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
     expect(await screen.findByText("34 of 3,034 words seen")).toBeInTheDocument();
     expect(screen.getByText("11 due today")).toBeInTheDocument();
     expect(screen.getByText("8 answers")).toBeInTheDocument();
-    expect(screen.getByText("abate")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Recent recall" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Continue studying" })).toHaveAttribute(
       "href",
       "/study",
@@ -98,13 +88,12 @@ describe("dashboard shell", () => {
         remembered: 0,
         forgot: 0,
       },
-      recent_outcomes: [],
     });
 
     render(<DashboardShell />);
 
     expect(await screen.findByText("0 of 3,034 words seen")).toBeInTheDocument();
-    expect(screen.getByText("No recall history yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Recent recall" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Start studying" })).toHaveAttribute("href", "/study");
   });
 

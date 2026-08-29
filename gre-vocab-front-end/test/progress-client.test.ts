@@ -24,16 +24,6 @@ const summary: LearningProgressSummary = {
     remembered: 6,
     forgot: 2,
   },
-  recent_outcomes: [
-    {
-      word_id: "00000000-0000-4000-8000-000000000001",
-      term: "abate",
-      rating: "remembered",
-      phase: "learning",
-      next_due_at: "2026-08-28T18:10:00Z",
-      occurred_at: "2026-08-28T18:00:00Z",
-    },
-  ],
 };
 
 const jsonResponse = (body: unknown, status: number) =>

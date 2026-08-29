@@ -1185,18 +1185,11 @@
                     },
                     "today": {
                         "$ref": "#/components/schemas/TodayProgress"
-                    },
-                    "recent_outcomes": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/RecentRecallOutcome"
-                        }
                     }
                 },
                 "required": [
                     "actionable",
                     "corpus",
-                    "recent_outcomes",
                     "today"
                 ]
             },
@@ -1240,15 +1233,6 @@
                 "required": [
                     "email"
                 ]
-            },
-            "PhaseEnum": {
-                "enum": [
-                    "learning",
-                    "review",
-                    "relearning"
-                ],
-                "type": "string",
-                "description": "* `learning` - Learning\n* `review` - Review\n* `relearning` - Relearning"
             },
             "ProgressError": {
                 "type": "object",
@@ -1386,40 +1370,6 @@
                     "previous_phase",
                     "review_number",
                     "scheduler_version"
-                ]
-            },
-            "RecentRecallOutcome": {
-                "type": "object",
-                "properties": {
-                    "word_id": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "term": {
-                        "type": "string"
-                    },
-                    "rating": {
-                        "$ref": "#/components/schemas/RatingEnum"
-                    },
-                    "phase": {
-                        "$ref": "#/components/schemas/PhaseEnum"
-                    },
-                    "next_due_at": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "occurred_at": {
-                        "type": "string",
-                        "format": "date-time"
-                    }
-                },
-                "required": [
-                    "next_due_at",
-                    "occurred_at",
-                    "phase",
-                    "rating",
-                    "term",
-                    "word_id"
                 ]
             },
             "RecordRecallAnswerRequest": {

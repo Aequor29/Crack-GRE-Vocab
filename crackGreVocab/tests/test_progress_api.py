@@ -68,7 +68,6 @@ class LearningProgressApiTests(TestCase):
                     "remembered": 0,
                     "forgot": 0,
                 },
-                "recent_outcomes": [],
             },
         )
 
@@ -134,7 +133,6 @@ class LearningProgressApiTests(TestCase):
             new_word_target=1,
             planner_version="test-planner",
         )
-        outcomes = []
         for position, (entry, rating) in enumerate(
             zip(entries[:2], ("remembered", "forgot"), strict=True),
             start=1,
@@ -156,19 +154,17 @@ class LearningProgressApiTests(TestCase):
                 submitted_at=occurred_at,
                 accepted_at=occurred_at,
             )
-            outcomes.append(
-                RecallOutcome.objects.create(
-                    answer=answer,
-                    review_number=1,
-                    scheduler_version="test-scheduler",
-                    previous_phase="",
-                    next_phase="learning",
-                    previous_due_at=None,
-                    next_due_at=occurred_at + timedelta(minutes=10),
-                    previous_state={},
-                    next_state={"step": 1},
-                    occurred_at=occurred_at,
-                )
+            RecallOutcome.objects.create(
+                answer=answer,
+                review_number=1,
+                scheduler_version="test-scheduler",
+                previous_phase="",
+                next_phase="learning",
+                previous_due_at=None,
+                next_due_at=occurred_at + timedelta(minutes=10),
+                previous_state={},
+                next_state={"step": 1},
+                occurred_at=occurred_at,
             )
 
         self.client.force_login(self.learner)
@@ -210,14 +206,7 @@ class LearningProgressApiTests(TestCase):
                 "forgot": 1,
             },
         )
-        self.assertEqual(
-            [outcome["term"] for outcome in payload["recent_outcomes"]],
-            [entries[0].term, entries[1].term],
-        )
-        self.assertEqual(
-            payload["recent_outcomes"][0]["word_id"],
-            str(outcomes[0].answer.item.corpus_entry.word_id),
-        )
+        self.assertNotIn("recent_outcomes", payload)
 
     def test_auth_timezone_corpus_and_transient_failures_have_stable_codes(self):
         anonymous = self.client.get(
