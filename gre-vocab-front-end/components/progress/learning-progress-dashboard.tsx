@@ -61,7 +61,7 @@ function Coverage({ summary }: { summary: LearningProgressSummary }) {
 
   return (
     <article className="rounded-[2rem] border border-black/10 bg-surface p-7 sm:p-9 dark:border-white/10 lg:col-span-2">
-      <p className="text-sm font-bold uppercase tracking-[0.18em] text-accent">Corpus coverage</p>
+      <p className="text-sm font-bold uppercase tracking-[0.18em] text-accent">Learning progress</p>
       <p className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
         {formatNumber(seen)} of {formatNumber(summary.corpus.total)} words seen
       </p>
