@@ -22,7 +22,7 @@ from .selectors import (
     list_word_phase_changes,
 )
 
-REVIEW_RECALL_PERIOD_DAYS = 30
+REVIEW_RECALL_PERIOD_DAYS = 7
 REVIEW_RECALL_MINIMUM_ANSWERS = 10
 INSIGHTS_CALENDAR_WEEKS = 12
 
@@ -107,9 +107,7 @@ def _learning_insights_window(
     learner_timezone: ZoneInfo,
 ) -> LearningInsightsWindow:
     local_today = observed_at.astimezone(learner_timezone).date()
-    current_starts_on = local_today - timedelta(
-        days=REVIEW_RECALL_PERIOD_DAYS - 1
-    )
+    current_starts_on = local_today - timedelta(days=REVIEW_RECALL_PERIOD_DAYS - 1)
     previous_ends_on = current_starts_on - timedelta(days=1)
     current_week_starts_on = local_today - timedelta(days=local_today.weekday())
     calendar_starts_on = current_week_starts_on - timedelta(
@@ -168,9 +166,7 @@ def _build_review_recall(
         counts.current_answers >= REVIEW_RECALL_MINIMUM_ANSWERS
         and counts.previous_answers >= REVIEW_RECALL_MINIMUM_ANSWERS
     ):
-        current_rate = round(
-            counts.current_remembered * 100 / counts.current_answers
-        )
+        current_rate = round(counts.current_remembered * 100 / counts.current_answers)
         previous_rate = round(
             counts.previous_remembered * 100 / counts.previous_answers
         )
@@ -237,9 +233,7 @@ def _weekly_learning_curve(
             phases[change.word_id] = change.next_phase
             change_index += 1
         review = sum(phase == "review" for phase in phases.values())
-        learning = sum(
-            phase in {"learning", "relearning"} for phase in phases.values()
-        )
+        learning = sum(phase in {"learning", "relearning"} for phase in phases.values())
         curve.append(
             {
                 "starts_on": starts_on.isoformat(),

@@ -324,7 +324,7 @@ class LearningInsightsApiTests(TestCase):
             occurred_at=occurred_at,
         )
 
-    def test_review_recall_compares_local_30_day_periods_and_excludes_learning(self):
+    def test_review_recall_compares_local_7_day_periods_and_excludes_learning(self):
         observed_at = datetime(2026, 8, 29, 18, tzinfo=UTC)
         for occurred_at, rating, previous_phase in (
             (
@@ -333,22 +333,22 @@ class LearningInsightsApiTests(TestCase):
                 "review",
             ),
             (
-                datetime(2026, 8, 20, 18, tzinfo=UTC),
+                datetime(2026, 8, 25, 18, tzinfo=UTC),
                 "forgot",
                 "review",
             ),
             (
-                datetime(2026, 8, 19, 18, tzinfo=UTC),
+                datetime(2026, 8, 24, 18, tzinfo=UTC),
                 "remembered",
                 "learning",
             ),
             (
-                datetime(2026, 7, 20, 18, tzinfo=UTC),
+                datetime(2026, 8, 20, 18, tzinfo=UTC),
                 "remembered",
                 "review",
             ),
             (
-                datetime(2026, 7, 10, 18, tzinfo=UTC),
+                datetime(2026, 8, 18, 18, tzinfo=UTC),
                 "forgot",
                 "review",
             ),
@@ -370,7 +370,7 @@ class LearningInsightsApiTests(TestCase):
             response.json()["review_recall"],
             {
                 "current": {
-                    "starts_on": "2026-07-31",
+                    "starts_on": "2026-08-23",
                     "ends_on": "2026-08-29",
                     "remembered": 1,
                     "answers": 2,
@@ -378,8 +378,8 @@ class LearningInsightsApiTests(TestCase):
                     "has_sufficient_data": False,
                 },
                 "previous": {
-                    "starts_on": "2026-07-01",
-                    "ends_on": "2026-07-30",
+                    "starts_on": "2026-08-16",
+                    "ends_on": "2026-08-22",
                     "remembered": 1,
                     "answers": 2,
                     "rate_percent": 50,
@@ -393,12 +393,12 @@ class LearningInsightsApiTests(TestCase):
         observed_at = datetime(2026, 8, 29, 18, tzinfo=UTC)
         for index in range(10):
             self.create_outcome(
-                occurred_at=datetime(2026, 8, 10, 18, index, tzinfo=UTC),
+                occurred_at=datetime(2026, 8, 26, 18, index, tzinfo=UTC),
                 rating="remembered" if index < 8 else "forgot",
                 previous_phase="review",
             )
             self.create_outcome(
-                occurred_at=datetime(2026, 7, 10, 18, index, tzinfo=UTC),
+                occurred_at=datetime(2026, 8, 20, 18, index, tzinfo=UTC),
                 rating="remembered" if index < 6 else "forgot",
                 previous_phase="review",
             )

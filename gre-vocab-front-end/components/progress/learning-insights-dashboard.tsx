@@ -59,7 +59,7 @@ function recallComparison(change: number | null): string | null {
   }
   const sign = change > 0 ? "+" : "";
   const unit = Math.abs(change) === 1 ? "point" : "points";
-  return `${sign}${change} ${unit} from the previous 30 days`;
+  return `${sign}${change} ${unit} from the previous 7 days`;
 }
 
 function ReviewRecallCard({

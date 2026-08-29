@@ -65,7 +65,7 @@ const insights: LearningInsights = {
   timezone: "America/Chicago",
   review_recall: {
     current: {
-      starts_on: "2026-07-31",
+      starts_on: "2026-08-23",
       ends_on: "2026-08-29",
       remembered: 8,
       answers: 10,
@@ -73,8 +73,8 @@ const insights: LearningInsights = {
       has_sufficient_data: true,
     },
     previous: {
-      starts_on: "2026-07-01",
-      ends_on: "2026-07-30",
+      starts_on: "2026-08-16",
+      ends_on: "2026-08-22",
       remembered: 6,
       answers: 10,
       rate_percent: 60,
@@ -161,7 +161,7 @@ describe("dashboard shell", () => {
     );
     expect(await screen.findByRole("heading", { name: "Review recall" })).toBeInTheDocument();
     expect(screen.getByText("80%")).toBeInTheDocument();
-    expect(screen.getByText("+20 points from the previous 30 days")).toBeInTheDocument();
+    expect(screen.getByText("+20 points from the previous 7 days")).toBeInTheDocument();
     expect(screen.getByText("Initial learning and relearning are excluded.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Learning curve" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Study days" })).toBeInTheDocument();
