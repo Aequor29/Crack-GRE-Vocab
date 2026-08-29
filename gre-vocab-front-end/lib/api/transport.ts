@@ -23,7 +23,6 @@ export class ApiTransportError extends Error {
 type JsonRequest = {
   body?: unknown;
   csrfToken?: string;
-  credentials: "include" | "omit";
   method: "GET" | "POST";
 };
 
@@ -85,7 +84,7 @@ async function requestApiJson(
     response = await fetcher(url, {
       ...(body === undefined ? {} : { body }),
       cache: "no-store",
-      credentials: request.credentials,
+      credentials: "include",
       headers: {
         Accept: "application/json",
         ...(hasBody ? { "Content-Type": "application/json" } : {}),
@@ -106,12 +105,8 @@ async function requestApiJson(
   };
 }
 
-export function getApiJson(
-  path: string,
-  options: ApiRequestOptions = {},
-  credentials: "include" | "omit" = "include",
-): Promise<ApiJsonResult> {
-  return requestApiJson(path, { credentials, method: "GET" }, options);
+export function getApiJson(path: string, options: ApiRequestOptions = {}): Promise<ApiJsonResult> {
+  return requestApiJson(path, { method: "GET" }, options);
 }
 
 export async function postApiJsonWithCsrf(
@@ -134,7 +129,6 @@ export async function postApiJsonWithCsrf(
     {
       body,
       csrfToken: token,
-      credentials: "include",
       method: "POST",
     },
     options,

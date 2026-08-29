@@ -36,7 +36,7 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
   if (auth.status === "checking") {
     return (
       <p aria-live="polite" className="text-sm text-foreground/70" role="status">
-        Restoring your session…
+        Checking your account…
       </p>
     );
   }
@@ -45,8 +45,11 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
     return (
       <div className="space-y-4">
         <p className="text-foreground/70">You are already signed in.</p>
-        <Link className="font-bold text-accent underline-offset-4 hover:underline" href="/account">
-          Go to your account
+        <Link
+          className="font-bold text-accent underline-offset-4 hover:underline"
+          href="/dashboard"
+        >
+          Go to your dashboard
         </Link>
       </div>
     );
@@ -75,7 +78,7 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
       } else {
         await auth.signIn({ email, password });
       }
-      router.replace("/account");
+      router.replace("/dashboard");
       router.refresh();
     } catch (error) {
       if (error instanceof AuthApiError) {
@@ -105,8 +108,7 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
 
       {auth.status === "unavailable" ? (
         <p className="rounded-2xl bg-amber-500/10 p-4 text-sm text-foreground" role="status">
-          The local backend was unavailable during session restoration. You can retry by submitting
-          the form.
+          We couldn&apos;t connect. You can still try submitting the form again.
         </p>
       ) : null}
 

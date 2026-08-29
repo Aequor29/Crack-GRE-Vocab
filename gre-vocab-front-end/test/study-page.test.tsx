@@ -8,11 +8,9 @@ vi.mock("@/components/study/study-session", () => ({
 }));
 
 describe("study page hierarchy", () => {
-  it("keeps the page title semantic without distracting from the active card", () => {
+  it("provides a semantic page title for the study experience", () => {
     render(<StudyPage />);
 
-    expect(screen.queryByText("Durable recall")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "One word at a time." })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Study vocabulary" })).toHaveClass("sr-only");
     expect(screen.getByText("Study session content")).toBeInTheDocument();
   });

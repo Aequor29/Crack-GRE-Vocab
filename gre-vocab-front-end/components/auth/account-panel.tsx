@@ -22,7 +22,7 @@ export function AccountPanel({ googleConnected = false }: { googleConnected?: bo
   if (auth.status === "checking") {
     return (
       <p aria-live="polite" className="text-foreground/70" role="status">
-        Restoring your session…
+        Loading your account…
       </p>
     );
   }
@@ -31,7 +31,7 @@ export function AccountPanel({ googleConnected = false }: { googleConnected?: bo
     return (
       <div className="space-y-5">
         <p className="text-foreground/70" role="alert">
-          The local backend is unavailable, so your session could not be restored.
+          We couldn&apos;t load your account. Please try again.
         </p>
         <button
           className="rounded-full border border-foreground/20 px-5 py-2 font-bold transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

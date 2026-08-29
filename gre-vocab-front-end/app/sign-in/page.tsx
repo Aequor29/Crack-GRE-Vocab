@@ -29,7 +29,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           Welcome back.
         </h1>
         <p className="mb-8 mt-4 leading-7 text-foreground/65">
-          Your study plan and progress stay with your server-managed session.
+          Sign in to continue studying and track your progress.
         </p>
         <AccountForm googleStatus={status} mode="sign-in" />
       </section>

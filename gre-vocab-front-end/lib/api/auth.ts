@@ -105,18 +105,11 @@ function readApiMessage(value: unknown): string | null {
 }
 
 function unavailableError(): AuthApiError {
-  return new AuthApiError(
-    "The local backend is unavailable. Start Django and PostgreSQL, then try again.",
-  );
+  return new AuthApiError("We couldn't connect. Please try again.");
 }
 
 function throwAuthTransportError(error: unknown): never {
   if (error instanceof ApiTransportError) {
-    if (error.kind === "configuration") {
-      throw new AuthApiError(
-        "The local API is not configured. Check NEXT_PUBLIC_API_BASE_URL and try again.",
-      );
-    }
     throw unavailableError();
   }
   throw error;

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@heroui/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -46,6 +47,16 @@ export function StudySession() {
   const [notice, setNotice] = useState<StudyNotice | null>(null);
   const termHeading = useRef<HTMLHeadingElement>(null);
 
+  const applyServerSession = useCallback((nextSession: StudySessionContract | null) => {
+    setSession(nextSession);
+    setRevealed(false);
+  }, []);
+
+  const clearPendingRecallAnswer = useCallback(() => {
+    clearPendingAnswer();
+    setPending(null);
+  }, []);
+
   const refreshExpiredAuthentication = useCallback(
     async (error: unknown) => {
       if (!(error instanceof StudyApiError) || error.kind !== "unauthenticated") {
@@ -57,6 +68,57 @@ export function StudySession() {
     [auth.refresh],
   );
 
+  const reloadAuthoritativeStudyProgress = useCallback(
+    async (signal?: AbortSignal) => {
+      const active = await getActiveStudySession({ signal });
+      if (!signal?.aborted) {
+        applyServerSession(active);
+      }
+    },
+    [applyServerSession],
+  );
+
+  const handleRejectedRecallAnswer = useCallback(
+    async (error: unknown, signal?: AbortSignal) => {
+      if (await refreshExpiredAuthentication(error)) {
+        return;
+      }
+      const staleProgress =
+        error instanceof StudyApiError && ["conflict", "not-found"].includes(error.kind);
+      if (!staleProgress) {
+        setNotice(studyNoticeFromError(error));
+        return;
+      }
+
+      clearPendingRecallAnswer();
+      applyServerSession(null);
+      setLoading(true);
+      try {
+        await reloadAuthoritativeStudyProgress(signal);
+        if (!signal?.aborted) {
+          setNotice({
+            message: "Your study progress changed elsewhere, so this page was refreshed.",
+            retryable: false,
+          });
+        }
+      } catch (refreshError) {
+        if (!signal?.aborted && !(await refreshExpiredAuthentication(refreshError))) {
+          setNotice(studyNoticeFromError(refreshError));
+        }
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [
+      applyServerSession,
+      clearPendingRecallAnswer,
+      refreshExpiredAuthentication,
+      reloadAuthoritativeStudyProgress,
+    ],
+  );
+
   const restoreStudyProgress = useCallback(
     async (signal?: AbortSignal) => {
       if (!auth.account) {
@@ -65,49 +127,33 @@ export function StudySession() {
       setLoading(true);
       setNotice(null);
 
-      const stored = loadPendingAnswer(auth.account.id);
-      if (stored) {
-        setPending(stored);
-        try {
-          const recovered = await submitRecallAnswer(stored, { signal });
-          if (signal?.aborted) {
-            return;
-          }
-          clearPendingAnswer();
-          setPending(null);
-          setSession(recovered.session);
-          setRevealed(false);
-          setLoading(false);
-          return;
-        } catch (error) {
-          if (signal?.aborted) {
-            return;
-          }
-          if (await refreshExpiredAuthentication(error)) {
-            return;
-          }
-          if (
-            !(error instanceof StudyApiError) ||
-            !["conflict", "not-found"].includes(error.kind)
-          ) {
-            setNotice(studyNoticeFromError(error));
-            setLoading(false);
-            return;
-          }
-          clearPendingAnswer();
-          setPending(null);
-        }
-      }
-
       try {
-        const active = await getActiveStudySession({ signal });
-        if (!signal?.aborted) {
-          setSession(active);
-          setRevealed(false);
+        const stored = loadPendingAnswer(auth.account.id);
+        if (stored) {
+          setPending(stored);
+          try {
+            const recovered = await submitRecallAnswer(stored, { signal });
+            if (signal?.aborted) {
+              return;
+            }
+            clearPendingRecallAnswer();
+            applyServerSession(recovered.session);
+            return;
+          } catch (error) {
+            if (signal?.aborted) {
+              return;
+            }
+            await handleRejectedRecallAnswer(error, signal);
+            return;
+          }
         }
-      } catch (error) {
-        if (!signal?.aborted && !(await refreshExpiredAuthentication(error))) {
-          setNotice(studyNoticeFromError(error));
+
+        try {
+          await reloadAuthoritativeStudyProgress(signal);
+        } catch (error) {
+          if (!signal?.aborted && !(await refreshExpiredAuthentication(error))) {
+            setNotice(studyNoticeFromError(error));
+          }
         }
       } finally {
         if (!signal?.aborted) {
@@ -115,7 +161,14 @@ export function StudySession() {
         }
       }
     },
-    [auth.account, refreshExpiredAuthentication],
+    [
+      applyServerSession,
+      auth.account,
+      clearPendingRecallAnswer,
+      handleRejectedRecallAnswer,
+      refreshExpiredAuthentication,
+      reloadAuthoritativeStudyProgress,
+    ],
   );
 
   useEffect(() => {
@@ -144,8 +197,7 @@ export function StudySession() {
     setNotice(null);
     try {
       const created = await createStudySession(newWordTarget);
-      setSession(created);
-      setRevealed(false);
+      applyServerSession(created);
     } catch (error) {
       setNotice(studyNoticeFromError(error));
     } finally {
@@ -153,40 +205,15 @@ export function StudySession() {
     }
   }
 
-  async function reloadAuthoritativeStudyProgress() {
-    const active = await getActiveStudySession();
-    setSession(active);
-    setRevealed(false);
-  }
-
   async function submitPendingRecallAnswer(operation: PendingStudyAnswer) {
     setSubmitting(true);
     setNotice(null);
     try {
       const recorded = await submitRecallAnswer(operation);
-      clearPendingAnswer();
-      setPending(null);
-      setSession(recorded.session);
-      setRevealed(false);
+      clearPendingRecallAnswer();
+      applyServerSession(recorded.session);
     } catch (error) {
-      if (await refreshExpiredAuthentication(error)) {
-        return;
-      }
-      if (error instanceof StudyApiError && ["conflict", "not-found"].includes(error.kind)) {
-        clearPendingAnswer();
-        setPending(null);
-        try {
-          await reloadAuthoritativeStudyProgress();
-          setNotice({
-            message: "Your study progress changed elsewhere, so this page was refreshed.",
-            retryable: false,
-          });
-        } catch (refreshError) {
-          setNotice(studyNoticeFromError(refreshError));
-        }
-      } else {
-        setNotice(studyNoticeFromError(error));
-      }
+      await handleRejectedRecallAnswer(error);
     } finally {
       setSubmitting(false);
     }
@@ -210,7 +237,7 @@ export function StudySession() {
     return (
       <div className="space-y-5">
         <p className="text-foreground/70" role="alert">
-          The local backend is unavailable, so your learner session could not be restored.
+          We couldn&apos;t load your study progress. Please try again.
         </p>
         <Button onPress={() => void auth.refresh()} variant="primary">
           Try again
@@ -222,7 +249,7 @@ export function StudySession() {
   if (auth.status === "checking" || loading) {
     return (
       <p aria-live="polite" className="text-foreground/70" role="status">
-        Restoring your study session…
+        Loading your study progress…
       </p>
     );
   }
@@ -266,16 +293,60 @@ export function StudySession() {
     );
   }
 
-  if (session.status === "completed" || !session.current_item) {
+  if (session.status === "completed") {
     return (
-      <div className="py-10 text-center" role="status">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">Session complete</p>
-        <h2 className="mt-3 text-4xl font-black tracking-tight">
-          You finished all {session.item_count} cards.
-        </h2>
-        <p className="mx-auto mt-4 max-w-xl text-foreground/65">
-          Every accepted answer and its next review time are safely stored in PostgreSQL.
-        </p>
+      <div className="space-y-6 py-10 text-center">
+        <div role="status">
+          <h2 className="text-4xl font-black tracking-tight">Session complete</h2>
+          <p className="mx-auto mt-4 max-w-xl text-foreground/65">
+            You finished all {session.item_count} cards. Come back when your next reviews are ready.
+          </p>
+        </div>
+        <Link
+          className="inline-flex rounded-full bg-accent px-6 py-3 font-bold text-accent-foreground shadow-lg shadow-accent/15 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background motion-reduce:transform-none"
+          href="/dashboard"
+        >
+          Back to dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  if (session.status === "abandoned") {
+    return (
+      <div className="space-y-5 py-10 text-center">
+        <div role="status">
+          <h2 className="text-4xl font-black tracking-tight">Session ended</h2>
+          <p className="mx-auto mt-4 max-w-xl text-foreground/65">
+            This session is no longer active. You can plan another session from current progress.
+          </p>
+        </div>
+        <Button
+          onPress={() => {
+            clearPendingRecallAnswer();
+            setNotice(null);
+            applyServerSession(null);
+          }}
+          variant="primary"
+        >
+          Plan another session
+        </Button>
+      </div>
+    );
+  }
+
+  if (!session.current_item) {
+    return (
+      <div className="space-y-5 py-10 text-center">
+        <div role="alert">
+          <h2 className="text-3xl font-black tracking-tight">Study session needs attention</h2>
+          <p className="mx-auto mt-4 max-w-xl text-foreground/65">
+            We couldn&apos;t find your next card. Reload your study progress to continue.
+          </p>
+        </div>
+        <Button onPress={() => void restoreStudyProgress()} variant="primary">
+          Reload study progress
+        </Button>
       </div>
     );
   }

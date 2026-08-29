@@ -6,9 +6,10 @@ local-only cold rebuild: the previous prototype is retired, and Milestone 1 is
 not a generally available product.
 
 The current foundation includes a supported Django/PostgreSQL backend, a clean
-Next.js application shell, a generated typed API boundary, and Learner Accounts
-backed by Django sessions. Study flows, progress views, hosted infrastructure,
-and deployment automation remain separately scoped work.
+Next.js application shell, a generated typed API boundary, Learner Accounts,
+backend-planned study sessions, answer recovery, and a dashboard shell. Progress
+reporting, hosted infrastructure, and deployment automation remain separately
+scoped work.
 
 ## Repository layout
 
@@ -36,10 +37,11 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000>. The readiness card and account screens call the local Django service
-configured by `NEXT_PUBLIC_API_BASE_URL`; it remains usable and offers a manual
-retry when Django or PostgreSQL is unavailable. See `gre-vocab-front-end/README.md`
-for its supported stack, boundaries, and quality commands.
+Open <http://localhost:3000>; the root route leads to the protected dashboard.
+Dashboard, account, and study screens call the local Django service configured
+by `NEXT_PUBLIC_API_BASE_URL` and offer safe retry states when it is unavailable.
+See `gre-vocab-front-end/README.md` for the supported stack, routes, and quality
+commands.
 
 Keep the frontend and API hostnames paired: use `localhost:3000` with
 `localhost:8000`, or `127.0.0.1:3000` with `127.0.0.1:8000`. Although both
@@ -184,12 +186,11 @@ both artifacts when an API change is intentional.
 
 ## Local full-stack smoke
 
-With PostgreSQL, Django, and Next.js running as described above, open
-<http://localhost:3000> and confirm the readiness card announces `Backend and
-database ready`. Stop PostgreSQL and choose `Try again` to confirm the generic
-database-unavailable state, then restart PostgreSQL and retry to confirm
-recovery. This exercises the browser, exact local-origin CORS policy, Django,
-and PostgreSQL without introducing hosted infrastructure.
+With PostgreSQL, Django, and Next.js running as described above, create or sign
+in to a learner account, confirm `/dashboard` loads, and start a session from
+`/study`. Stop PostgreSQL, refresh the dashboard, and confirm its generic retry
+state; then restart PostgreSQL and retry to confirm recovery. The backend-only
+readiness endpoint shown above remains available for direct service diagnosis.
 
 For the account smoke, create a learner, reload `/account` to confirm session
 restoration, sign out and confirm the protected page returns to sign in, then

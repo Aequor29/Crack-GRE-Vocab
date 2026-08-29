@@ -139,7 +139,7 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
       ? providerMessages[status]
       : googleSignIn.available
         ? null
-        : "Google sign-in is unavailable until the local API configuration is complete.";
+        : "Google sign-in is unavailable right now. Use email and password instead.";
   const messageRole =
     linkCancelled || status === "cancelled" || (!status && !googleSignIn.available)
       ? "status"

@@ -157,7 +157,7 @@ describe("learner account experience", () => {
     await waitFor(() => expect(screen.queryByText("Ada Learner")).not.toBeInTheDocument());
   });
 
-  it("submits an accessible signup and routes to the protected account", async () => {
+  it("submits an accessible signup and routes to the dashboard", async () => {
     getCurrentAccountMock.mockResolvedValue(null);
     signUpMock.mockResolvedValue(account);
 
@@ -184,7 +184,7 @@ describe("learner account experience", () => {
         password: "durable-recall-river-927",
       }),
     );
-    expect(navigation.replace).toHaveBeenCalledWith("/account");
+    expect(navigation.replace).toHaveBeenCalledWith("/dashboard");
   });
 
   it("associates server validation errors with the signup field", async () => {
