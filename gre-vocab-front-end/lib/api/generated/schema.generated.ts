@@ -30,6 +30,13 @@ export type ReadinessStatusEnum = "ready" | "unavailable";
 export type RatingEnum = "remembered" | "forgot";
 
 /**
+ * * `learning` - Learning
+ * * `review` - Review
+ * * `relearning` - Relearning
+ */
+export type PhaseEnum = "learning" | "review" | "relearning";
+
+/**
  * * `due` - Due review
  * * `new` - New Word
  */
@@ -40,6 +47,14 @@ export type KindEnum = "due" | "new";
  * * `unavailable` - unavailable
  */
 export type DatabaseEnum = "available" | "unavailable";
+
+export interface ActionableProgress {
+  /** @min 0 */
+  due_now: number;
+  /** @min 0 */
+  due_today: number;
+  has_active_session: boolean;
+}
 
 /** Describe an API response carrying one human-readable message. */
 export interface ApiMessage {
@@ -55,6 +70,18 @@ export interface AuthValidationError {
   token?: string[];
   uid?: string[];
   non_field_errors?: string[];
+}
+
+export interface CorpusProgress {
+  version: string;
+  /** @min 0 */
+  total: number;
+  /** @min 0 */
+  unseen: number;
+  /** @min 0 */
+  learning: number;
+  /** @min 0 */
+  review: number;
 }
 
 export interface CreateStudySessionRequest {
@@ -87,6 +114,13 @@ export interface LearnerAccount {
   display_name: string;
 }
 
+export interface LearningProgressSummary {
+  corpus: CorpusProgress;
+  actionable: ActionableProgress;
+  today: TodayProgress;
+  recent_outcomes: RecentRecallOutcome[];
+}
+
 /** Validate the opaque identity, token, and replacement password shape. */
 export interface PasswordResetConfirmRequest {
   /**
@@ -111,6 +145,12 @@ export interface PasswordResetStartRequest {
    * @maxLength 254
    */
   email: string;
+}
+
+export interface ProgressError {
+  code: string;
+  detail: string;
+  retryable?: boolean;
 }
 
 /** Describe the stable ready or database-unavailable response shape. */
@@ -159,6 +199,27 @@ export interface RecallOutcome {
   next_phase: string;
   /** @format date-time */
   previous_due_at?: string | null;
+  /** @format date-time */
+  next_due_at: string;
+  /** @format date-time */
+  occurred_at: string;
+}
+
+export interface RecentRecallOutcome {
+  /** @format uuid */
+  word_id: string;
+  term: string;
+  /**
+   * * `remembered` - Remembered
+   * * `forgot` - Forgot
+   */
+  rating: RatingEnum;
+  /**
+   * * `learning` - Learning
+   * * `review` - Review
+   * * `relearning` - Relearning
+   */
+  phase: PhaseEnum;
   /** @format date-time */
   next_due_at: string;
   /** @format date-time */
@@ -295,4 +356,20 @@ export interface StudyValidationError {
   client_request_id?: string[];
   new_word_target?: string[];
   rating?: string[];
+}
+
+export interface TodayProgress {
+  /** @format date */
+  date: string;
+  timezone: string;
+  /** @min 0 */
+  sessions_started: number;
+  /** @min 0 */
+  sessions_completed: number;
+  /** @min 0 */
+  answers: number;
+  /** @min 0 */
+  remembered: number;
+  /** @min 0 */
+  forgot: number;
 }
