@@ -188,7 +188,7 @@ describe("study session experience", () => {
     expect(submitRecallAnswerMock).toHaveBeenCalledTimes(1);
   });
 
-  it("replays a stored pending answer before restoring session progress", async () => {
+  it("restores a saved answer with its original request identity", async () => {
     const pending = savePendingAnswer(7, {
       client_request_id: "00000000-0000-4000-8000-000000000019",
       itemId: firstItem.id,
