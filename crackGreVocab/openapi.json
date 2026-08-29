@@ -592,6 +592,84 @@
                 }
             }
         },
+        "/api/progress/summary/": {
+            "get": {
+                "operationId": "progress_summary_retrieve",
+                "description": "Build the snapshot using the learner's requested IANA timezone.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "timezone",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "progress"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LearningProgressSummary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProgressError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProgressError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProgressError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProgressError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/readiness/": {
             "get": {
                 "operationId": "readiness_retrieve",
@@ -907,6 +985,27 @@
     },
     "components": {
         "schemas": {
+            "ActionableProgress": {
+                "type": "object",
+                "properties": {
+                    "due_now": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "due_today": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "has_active_session": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "due_now",
+                    "due_today",
+                    "has_active_session"
+                ]
+            },
             "ApiMessage": {
                 "type": "object",
                 "description": "Describe an API response carrying one human-readable message.",
@@ -963,6 +1062,37 @@
                         }
                     }
                 }
+            },
+            "CorpusProgress": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "unseen": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "learning": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "review": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "learning",
+                    "review",
+                    "total",
+                    "unseen",
+                    "version"
+                ]
             },
             "CreateStudySessionRequest": {
                 "type": "object",
@@ -1044,6 +1174,25 @@
                     "id"
                 ]
             },
+            "LearningProgressSummary": {
+                "type": "object",
+                "properties": {
+                    "corpus": {
+                        "$ref": "#/components/schemas/CorpusProgress"
+                    },
+                    "actionable": {
+                        "$ref": "#/components/schemas/ActionableProgress"
+                    },
+                    "today": {
+                        "$ref": "#/components/schemas/TodayProgress"
+                    }
+                },
+                "required": [
+                    "actionable",
+                    "corpus",
+                    "today"
+                ]
+            },
             "PasswordResetConfirmRequest": {
                 "type": "object",
                 "description": "Validate the opaque identity, token, and replacement password shape.",
@@ -1083,6 +1232,24 @@
                 },
                 "required": [
                     "email"
+                ]
+            },
+            "ProgressError": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "retryable": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "code",
+                    "detail"
                 ]
             },
             "RatingEnum": {
@@ -1523,6 +1690,47 @@
                 },
                 "required": [
                     "code"
+                ]
+            },
+            "TodayProgress": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "timezone": {
+                        "type": "string"
+                    },
+                    "sessions_started": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "sessions_completed": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "answers": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "remembered": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "forgot": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "answers",
+                    "date",
+                    "forgot",
+                    "remembered",
+                    "sessions_completed",
+                    "sessions_started",
+                    "timezone"
                 ]
             }
         },
