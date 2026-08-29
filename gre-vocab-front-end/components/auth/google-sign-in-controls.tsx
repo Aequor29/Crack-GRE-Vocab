@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@heroui/react/button";
+import { Input } from "@heroui/react/input";
+import { Link } from "@heroui/react/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
@@ -17,9 +20,6 @@ const providerMessages: Partial<Record<GoogleSignInStatus, string>> = {
   "provider-error": "Google sign-in could not be completed. Please try again.",
   unavailable: "Google sign-in is not configured for this environment.",
 };
-
-const inputClassName =
-  "mt-2 w-full rounded-2xl border border-black/15 bg-background px-4 py-3 text-base text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25 disabled:cursor-wait disabled:opacity-60 dark:border-white/15";
 
 export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
   const auth = useAuth();
@@ -83,16 +83,18 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
           <label className="text-sm font-bold" htmlFor="google_link_password">
             Current password
           </label>
-          <input
+          <Input
             aria-describedby={passwordError ? "google-link-password-error" : undefined}
             aria-invalid={Boolean(passwordError)}
             autoComplete="current-password"
-            className={inputClassName}
+            className="mt-2"
             disabled={submitting}
+            fullWidth
             id="google_link_password"
             name="google_link_password"
             required
             type="password"
+            variant="secondary"
           />
           {passwordError ? (
             <p
@@ -113,21 +115,17 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
           </p>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            className="rounded-full bg-accent px-5 py-3 font-bold text-accent-foreground disabled:cursor-wait disabled:opacity-60"
-            disabled={submitting}
-            type="submit"
-          >
+          <Button isDisabled={submitting} isPending={submitting} type="submit" variant="primary">
             {submitting ? "Confirming…" : "Confirm Google link"}
-          </button>
-          <button
-            className="rounded-full border border-foreground/20 px-5 py-3 font-bold disabled:cursor-wait disabled:opacity-60"
-            disabled={submitting}
-            onClick={() => void handleCancellation()}
+          </Button>
+          <Button
+            isDisabled={submitting}
+            onPress={() => void handleCancellation()}
             type="button"
+            variant="outline"
           >
             Cancel linking
-          </button>
+          </Button>
         </div>
       </form>
     );
@@ -159,22 +157,18 @@ export function GoogleSignInControls({ status }: GoogleSignInControlsProps) {
         </p>
       ) : null}
       {googleActionAvailable ? (
-        <a
+        <Link
           className="flex w-full items-center justify-center gap-3 rounded-full border border-foreground/20 px-6 py-3 font-bold transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           href={googleSignIn.url}
         >
           <span aria-hidden="true">G</span>
           Continue with Google
-        </a>
+        </Link>
       ) : (
-        <button
-          className="flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-full border border-foreground/20 px-6 py-3 font-bold opacity-55"
-          disabled
-          type="button"
-        >
+        <Button fullWidth isDisabled type="button" variant="outline">
           <span aria-hidden="true">G</span>
           Continue with Google
-        </button>
+        </Button>
       )}
     </div>
   );

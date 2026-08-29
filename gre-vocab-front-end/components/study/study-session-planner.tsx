@@ -1,4 +1,5 @@
-import { Button } from "@heroui/react";
+import { Button } from "@heroui/react/button";
+import { Slider } from "@heroui/react/slider";
 
 import type { StudyNotice } from "@/components/study/types";
 
@@ -37,33 +38,33 @@ export function StudySessionPlanner({
         <div className="space-y-3 rounded-2xl bg-rose-500/10 p-4" role="alert">
           <p className="text-sm font-medium">{notice.message}</p>
           {notice.retryable ? (
-            <button
-              className="text-sm font-bold text-accent underline-offset-4 hover:underline"
-              onClick={onRestore}
-              type="button"
-            >
+            <Button className="w-fit" onPress={onRestore} size="sm" variant="tertiary">
               Restore again
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
 
       <div className="grid gap-5 rounded-3xl border border-black/10 p-6 dark:border-white/10 sm:grid-cols-[1fr_auto] sm:items-end">
-        <label className="grid gap-2 font-bold" htmlFor="new-word-target">
-          New-word target
-          <span className="text-sm font-normal text-foreground/60">
+        <div>
+          <p className="font-bold">New-word target</p>
+          <p className="mt-2 text-sm font-normal text-foreground/60">
             Choose from 0 to 20. Current target: {newWordTarget}.
-          </span>
-          <input
-            className="h-2 w-full cursor-pointer accent-accent"
-            id="new-word-target"
-            max={20}
-            min={0}
-            onChange={(event) => onTargetChange(Number(event.target.value))}
-            type="range"
+          </p>
+          <Slider
+            aria-label="New-word target"
+            className="mt-4"
+            maxValue={20}
+            minValue={0}
+            onChange={(value) => onTargetChange(Array.isArray(value) ? (value[0] ?? 0) : value)}
             value={newWordTarget}
-          />
-        </label>
+          >
+            <Slider.Track>
+              <Slider.Fill />
+              <Slider.Thumb />
+            </Slider.Track>
+          </Slider>
+        </div>
         <Button isDisabled={starting} isPending={starting} onPress={onStart} variant="primary">
           {starting ? "Planning…" : "Start session"}
         </Button>

@@ -1,4 +1,6 @@
-import { Button } from "@heroui/react";
+import { Button } from "@heroui/react/button";
+import { Card } from "@heroui/react/card";
+import { ProgressBar } from "@heroui/react/progress-bar";
 import type { RefObject } from "react";
 
 import type { StudyNotice } from "@/components/study/types";
@@ -43,21 +45,18 @@ export function StudyCard({
         <p>{item.kind === "due" ? "Due review" : "New word"}</p>
       </div>
 
-      <div
-        className="h-2 overflow-hidden rounded-full bg-foreground/10"
-        role="progressbar"
+      <ProgressBar
         aria-label="Study progress"
-        aria-valuemax={session.item_count}
-        aria-valuemin={0}
-        aria-valuenow={session.answered_count}
+        className="w-full"
+        maxValue={session.item_count}
+        value={session.answered_count}
       >
-        <div
-          className="h-full rounded-full bg-accent transition-[width]"
-          style={{ width: `${(session.answered_count / session.item_count) * 100}%` }}
-        />
-      </div>
+        <ProgressBar.Track>
+          <ProgressBar.Fill />
+        </ProgressBar.Track>
+      </ProgressBar>
 
-      <article className="rounded-[2rem] border border-black/10 bg-background/70 p-7 text-center dark:border-white/10 sm:p-12">
+      <Card className="rounded-[2rem] bg-background/70 p-7 text-center sm:p-12" variant="secondary">
         <div className={revealed ? undefined : "grid min-h-64 content-center"}>
           <h2
             className="text-5xl font-black tracking-[-0.05em] outline-none sm:text-7xl"
@@ -90,20 +89,21 @@ export function StudyCard({
             ))}
           </div>
         ) : null}
-      </article>
+      </Card>
 
       {notice ? (
         <div className="space-y-3 rounded-2xl bg-rose-500/10 p-4" role="alert">
           <p className="text-sm font-medium">{notice.message}</p>
           {notice.retryable && pending ? (
-            <button
-              className="text-sm font-bold text-accent underline-offset-4 hover:underline disabled:opacity-60"
-              disabled={submitting}
-              onClick={onRetry}
-              type="button"
+            <Button
+              className="w-fit"
+              isDisabled={submitting}
+              onPress={onRetry}
+              size="sm"
+              variant="tertiary"
             >
               Retry the same answer
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}

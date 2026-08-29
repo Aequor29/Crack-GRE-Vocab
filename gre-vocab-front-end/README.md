@@ -1,15 +1,26 @@
 # Crack GRE Vocab frontend
 
 This directory contains the local Next.js application for the private cold
-rebuild. It includes Learner Account screens, a protected dashboard shell, and
-the study-session experience. Hosted behavior remains outside this milestone.
+rebuild. It includes Learner Account screens, an actionable learning-progress
+dashboard, and the study-session experience. Hosted behavior remains outside
+this milestone.
 
 ## Supported toolchain
 
-- Node.js 24.19.x LTS (pinned in the repository `.nvmrc`)
+- Node.js 24.20.x LTS (pinned in the repository `.nvmrc`)
 - npm 11
 - Next.js 16 and React 19
 - TypeScript 7, Tailwind CSS 4, and HeroUI 3
+
+## Component system
+
+HeroUI v3 is the frontend component system for interactive controls and common
+surfaces. Import components from their direct package entry points, such as
+`@heroui/react/button`, so unused component families do not enter the client
+bundle. Tailwind remains responsible for page layout, spacing, typography, and
+product-specific visual treatment. Internal navigation continues to use
+Next.js `Link` so routing stays client-side; button-like navigation uses HeroUI
+variant styles rather than changing a link into a button.
 
 ## Local setup
 
@@ -59,10 +70,10 @@ npm run build
 npm run start
 ```
 
-The focused tests cover the application shell, dashboard access, typed account
-and study contracts, protected account behavior, accessible form errors, study
-recovery, and sign out. Product feature tests stay with the behavior they
-exercise.
+The focused tests cover the application shell, dashboard progress and recovery,
+typed account, progress, and study contracts, protected account behavior,
+accessible form errors, study recovery, and sign out. Product feature tests
+stay with the behavior they exercise.
 
 ## Typed API contract
 

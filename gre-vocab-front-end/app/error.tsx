@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { Button } from "@heroui/react/button";
 
 type ErrorPageProps = {
   error: Error & { digest?: string };
