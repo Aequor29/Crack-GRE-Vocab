@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { LearningProgressDashboard } from "@/components/progress/learning-progress-dashboard";
 
 export function DashboardShell() {
   const auth = useAuth();
@@ -64,27 +65,7 @@ export function DashboardShell() {
         </Link>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2">
-        <article className="rounded-[2rem] border border-black/10 bg-surface p-7 sm:p-8 dark:border-white/10">
-          <h2 className="text-2xl font-black tracking-tight">Study</h2>
-          <p className="mt-3 leading-7 text-foreground/65">
-            Continue an active session or start your next set of words.
-          </p>
-          <Link
-            className="mt-7 inline-flex rounded-full bg-accent px-6 py-3 font-bold text-accent-foreground shadow-lg shadow-accent/15 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background motion-reduce:transform-none"
-            href="/study"
-          >
-            Start studying
-          </Link>
-        </article>
-
-        <article className="rounded-[2rem] border border-black/10 bg-surface p-7 sm:p-8 dark:border-white/10">
-          <h2 className="text-2xl font-black tracking-tight">Progress</h2>
-          <p className="mt-3 leading-7 text-foreground/65">
-            Your study history and progress summaries will appear here.
-          </p>
-        </article>
-      </div>
+      <LearningProgressDashboard onAuthenticationExpired={auth.refresh} />
     </section>
   );
 }

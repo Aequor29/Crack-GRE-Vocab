@@ -8,8 +8,9 @@ not a generally available product.
 The current foundation includes a supported Django/PostgreSQL backend, a clean
 Next.js application shell, a generated typed API boundary, Learner Accounts,
 backend-planned study sessions, answer recovery, and a dashboard shell. Progress
-reporting, hosted infrastructure, and deployment automation remain separately
-scoped work.
+reporting now gives each learner current corpus coverage, due work, today's
+activity, and recent recall outcomes. Hosted infrastructure and deployment
+automation remain separately scoped work.
 
 ## Repository layout
 
@@ -21,7 +22,7 @@ scoped work.
 ## Supported runtimes
 
 - Python 3.14.6, pinned in `.python-version`
-- Node.js 24.19.x LTS, pinned in `.nvmrc`
+- Node.js 24.20.x LTS, pinned in `.nvmrc`
 - npm 11
 - PostgreSQL for the Django database
 

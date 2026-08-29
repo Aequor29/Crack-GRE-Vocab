@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "vocabulary.apps.VocabularyConfig",
     "study.apps.StudyConfig",
+    "progress.apps.ProgressConfig",
 ]
 
 MIDDLEWARE = [
