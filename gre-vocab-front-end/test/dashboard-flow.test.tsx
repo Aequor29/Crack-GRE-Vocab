@@ -28,9 +28,8 @@ describe("dashboard shell", () => {
   it("gives an authenticated learner a direct path into study", () => {
     render(<DashboardShell />);
 
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Welcome back, Ada" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByText(/Welcome back,/)).toHaveTextContent("Welcome back, Ada");
     expect(screen.getByRole("link", { name: "Start studying" })).toHaveAttribute("href", "/study");
     expect(screen.getByRole("link", { name: "Manage account" })).toHaveAttribute(
       "href",

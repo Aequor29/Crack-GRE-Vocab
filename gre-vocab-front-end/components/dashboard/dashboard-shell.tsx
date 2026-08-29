@@ -54,14 +54,14 @@ export function DashboardShell() {
     <section aria-labelledby="dashboard-title" className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-foreground/55">
-            Dashboard
+          <p className="text-lg font-medium text-foreground/65">
+            Welcome back, <span className="font-bold text-accent">{auth.account.display_name}</span>
           </p>
           <h1
-            className="mt-3 text-4xl font-black tracking-[-0.04em] sm:text-5xl"
+            className="mt-1 text-4xl font-black tracking-[-0.04em] sm:text-5xl"
             id="dashboard-title"
           >
-            Welcome back, <span className="text-accent">{auth.account.display_name}</span>
+            Dashboard
           </h1>
         </div>
         <Link
