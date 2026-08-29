@@ -100,8 +100,8 @@ function StudyAction({ summary }: { summary: LearningProgressSummary }) {
     : "Start studying";
   return (
     <Card
-      className="flex flex-col rounded-[2rem] border border-accent/25 p-7 sm:p-9"
-      variant="tertiary"
+      className="flex flex-col rounded-[2rem] bg-accent-soft p-7 text-foreground sm:p-9"
+      variant="transparent"
     >
       <p className="text-sm font-bold uppercase tracking-[0.18em] opacity-60">Next up</p>
       <p className="mt-4 text-5xl font-black tracking-[-0.05em]">
@@ -109,7 +109,10 @@ function StudyAction({ summary }: { summary: LearningProgressSummary }) {
       </p>
       <p className="mt-1 text-lg font-bold">due now</p>
       <p className="mt-3 opacity-65">{formatNumber(summary.actionable.due_today)} due today</p>
-      <Link className={`${buttonVariants({ variant: "primary" })} mt-8 w-fit`} href="/study">
+      <Link
+        className={`${buttonVariants({ variant: "primary" })} mt-8 w-full justify-center`}
+        href="/study"
+      >
         {actionLabel}
       </Link>
     </Card>
