@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@heroui/react/button";
+import { Card } from "@heroui/react/card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -27,19 +29,20 @@ export function DashboardShell() {
 
   if (auth.status === "unavailable") {
     return (
-      <section className="rounded-[2rem] border border-black/10 bg-surface p-7 sm:p-10 dark:border-white/10">
+      <Card className="p-7 sm:p-10">
         <h1 className="text-4xl font-black tracking-[-0.04em]">Dashboard</h1>
         <p className="mt-4 text-foreground/70" role="alert">
           We couldn&apos;t load your dashboard. Please try again.
         </p>
-        <button
-          className="mt-6 rounded-full bg-accent px-5 py-2.5 font-bold text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background"
-          onClick={() => void auth.refresh()}
+        <Button
+          className="mt-6"
+          onPress={() => void auth.refresh()}
           type="button"
+          variant="primary"
         >
           Try again
-        </button>
-      </section>
+        </Button>
+      </Card>
     );
   }
 

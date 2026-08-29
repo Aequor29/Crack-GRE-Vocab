@@ -1,12 +1,11 @@
 "use client";
 
+import { Button } from "@heroui/react/button";
+import { Input } from "@heroui/react/input";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 
 import { AuthApiError, confirmPasswordReset, requestPasswordReset } from "@/lib/api/auth";
-
-const inputClassName =
-  "mt-2 w-full rounded-2xl border border-black/15 bg-background px-4 py-3 text-base text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25 disabled:cursor-wait disabled:opacity-60 dark:border-white/15";
 
 export function PasswordResetRequestForm() {
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -59,18 +58,20 @@ export function PasswordResetRequestForm() {
         <label className="text-sm font-bold" htmlFor="password-reset-email">
           Email
         </label>
-        <input
+        <Input
           aria-describedby={emailErrorId}
           aria-invalid={Boolean(emailErrorId)}
           autoComplete="email"
-          className={inputClassName}
+          className="mt-2"
           disabled={submitting}
+          fullWidth
           id="password-reset-email"
           inputMode="email"
           maxLength={254}
           name="email"
           required
           type="email"
+          variant="secondary"
         />
         {emailError ? (
           <p
@@ -88,13 +89,15 @@ export function PasswordResetRequestForm() {
         </p>
       ) : null}
 
-      <button
-        className="w-full rounded-full bg-accent px-6 py-3 font-bold text-accent-foreground shadow-xl shadow-accent/20 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none"
-        disabled={submitting}
+      <Button
+        fullWidth
+        isDisabled={submitting}
+        isPending={submitting}
         type="submit"
+        variant="primary"
       >
         {submitting ? "Sending…" : "Send reset link"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -177,17 +180,19 @@ export function PasswordResetConfirmationForm({
         <label className="text-sm font-bold" htmlFor="password-reset-password">
           New password
         </label>
-        <input
+        <Input
           aria-describedby={passwordErrorId}
           aria-invalid={Boolean(passwordErrorId)}
           autoComplete="new-password"
-          className={inputClassName}
+          className="mt-2"
           disabled={submitting}
+          fullWidth
           id="password-reset-password"
           minLength={8}
           name="password"
           required
           type="password"
+          variant="secondary"
         />
         {passwordError ? (
           <p
@@ -205,13 +210,15 @@ export function PasswordResetConfirmationForm({
         </p>
       ) : null}
 
-      <button
-        className="w-full rounded-full bg-accent px-6 py-3 font-bold text-accent-foreground shadow-xl shadow-accent/20 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none"
-        disabled={submitting}
+      <Button
+        fullWidth
+        isDisabled={submitting}
+        isPending={submitting}
         type="submit"
+        variant="primary"
       >
         {submitting ? "Resetting…" : "Reset password"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@heroui/react/button";
+import { Input } from "@heroui/react/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
@@ -13,9 +15,6 @@ type AccountFormProps = {
   googleStatus?: GoogleSignInStatus;
   mode: "sign-in" | "sign-up";
 };
-
-const inputClassName =
-  "mt-2 w-full rounded-2xl border border-black/15 bg-background px-4 py-3 text-base text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25 disabled:cursor-wait disabled:opacity-60 dark:border-white/15";
 
 function FieldError({ id, messages }: { id: string; messages?: string[] }) {
   return messages?.length ? (
@@ -117,16 +116,18 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
           <label className="text-sm font-bold" htmlFor="display_name">
             Display name
           </label>
-          <input
+          <Input
             aria-describedby={nameErrorId}
             aria-invalid={Boolean(nameErrorId)}
             autoComplete="name"
-            className={inputClassName}
+            className="mt-2"
             disabled={submitting}
+            fullWidth
             id="display_name"
             maxLength={80}
             name="display_name"
             required
+            variant="secondary"
           />
           <FieldError id={`${mode}-name-error`} messages={fieldErrors.display_name} />
         </div>
@@ -136,18 +137,20 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
         <label className="text-sm font-bold" htmlFor="email">
           Email
         </label>
-        <input
+        <Input
           aria-describedby={emailErrorId}
           aria-invalid={Boolean(emailErrorId)}
           autoComplete="email"
-          className={inputClassName}
+          className="mt-2"
           disabled={submitting}
+          fullWidth
           id="email"
           inputMode="email"
           maxLength={254}
           name="email"
           required
           type="email"
+          variant="secondary"
         />
         <FieldError id={`${mode}-email-error`} messages={fieldErrors.email} />
       </div>
@@ -156,17 +159,19 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
         <label className="text-sm font-bold" htmlFor="password">
           Password
         </label>
-        <input
+        <Input
           aria-describedby={passwordErrorId}
           aria-invalid={Boolean(passwordErrorId)}
           autoComplete={signingUp ? "new-password" : "current-password"}
-          className={inputClassName}
+          className="mt-2"
           disabled={submitting}
+          fullWidth
           id="password"
           minLength={8}
           name="password"
           required
           type="password"
+          variant="secondary"
         />
         <FieldError id={`${mode}-password-error`} messages={fieldErrors.password} />
         {!signingUp ? (
@@ -190,13 +195,15 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
         </p>
       ) : null}
 
-      <button
-        className="w-full rounded-full bg-accent px-6 py-3 font-bold text-accent-foreground shadow-xl shadow-accent/20 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none"
-        disabled={submitting}
+      <Button
+        fullWidth
+        isDisabled={submitting}
+        isPending={submitting}
         type="submit"
+        variant="primary"
       >
         {submitting ? "Working…" : signingUp ? "Create account" : "Sign in"}
-      </button>
+      </Button>
 
       <p className="text-center text-sm text-foreground/65">
         {signingUp ? "Already have an account?" : "New to Crack GRE Vocab?"}{" "}

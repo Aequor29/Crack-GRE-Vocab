@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@heroui/react/button";
+import { Card } from "@heroui/react/card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -33,13 +35,9 @@ export function AccountPanel({ googleConnected = false }: { googleConnected?: bo
         <p className="text-foreground/70" role="alert">
           We couldn&apos;t load your account. Please try again.
         </p>
-        <button
-          className="rounded-full border border-foreground/20 px-5 py-2 font-bold transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          onClick={() => void auth.refresh()}
-          type="button"
-        >
+        <Button onPress={() => void auth.refresh()} type="button" variant="outline">
           Try again
-        </button>
+        </Button>
       </div>
     );
   }
@@ -82,16 +80,18 @@ export function AccountPanel({ googleConnected = false }: { googleConnected?: bo
           Google sign-in is connected to this account.
         </p>
       ) : null}
-      <dl className="divide-y divide-black/10 rounded-3xl border border-black/10 dark:divide-white/10 dark:border-white/10">
-        <div className="grid gap-1 p-5 sm:grid-cols-[8rem_1fr] sm:gap-4">
-          <dt className="text-sm font-bold text-foreground/60">Display name</dt>
-          <dd className="font-semibold">{auth.account.display_name}</dd>
-        </div>
-        <div className="grid gap-1 p-5 sm:grid-cols-[8rem_1fr] sm:gap-4">
-          <dt className="text-sm font-bold text-foreground/60">Email</dt>
-          <dd className="break-all">{auth.account.email}</dd>
-        </div>
-      </dl>
+      <Card className="overflow-hidden" variant="secondary">
+        <dl className="divide-y divide-black/10 dark:divide-white/10">
+          <div className="grid gap-1 p-5 sm:grid-cols-[8rem_1fr] sm:gap-4">
+            <dt className="text-sm font-bold text-foreground/60">Display name</dt>
+            <dd className="font-semibold">{auth.account.display_name}</dd>
+          </div>
+          <div className="grid gap-1 p-5 sm:grid-cols-[8rem_1fr] sm:gap-4">
+            <dt className="text-sm font-bold text-foreground/60">Email</dt>
+            <dd className="break-all">{auth.account.email}</dd>
+          </div>
+        </dl>
+      </Card>
 
       {signOutError ? (
         <p className="rounded-2xl bg-rose-500/10 p-4 text-sm font-medium" role="alert">
@@ -99,14 +99,15 @@ export function AccountPanel({ googleConnected = false }: { googleConnected?: bo
         </p>
       ) : null}
 
-      <button
-        className="rounded-full border border-foreground/20 px-6 py-3 font-bold transition-colors hover:border-rose-500 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-wait disabled:opacity-60 dark:hover:text-rose-300"
-        disabled={signingOut}
-        onClick={() => void handleSignOut()}
+      <Button
+        isDisabled={signingOut}
+        isPending={signingOut}
+        onPress={() => void handleSignOut()}
         type="button"
+        variant="danger-soft"
       >
         {signingOut ? "Signing out…" : "Sign out"}
-      </button>
+      </Button>
     </div>
   );
 }
