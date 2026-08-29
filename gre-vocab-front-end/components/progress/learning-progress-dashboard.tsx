@@ -76,14 +76,20 @@ function Coverage({ summary }: { summary: LearningProgressSummary }) {
           <ProgressBar.Fill />
         </ProgressBar.Track>
       </ProgressBar>
-      <dl className="mt-7 grid grid-cols-3 gap-4 border-t border-black/10 pt-6 dark:border-white/10">
+      <dl className="mt-7 grid grid-cols-2 gap-4 border-t border-black/10 pt-6 sm:grid-cols-4 dark:border-white/10">
         <div>
           <dt className="text-sm text-foreground/60">Learning</dt>
           <dd className="mt-1 text-2xl font-black">{formatNumber(summary.corpus.learning)}</dd>
         </div>
         <div>
-          <dt className="text-sm text-foreground/60">Review</dt>
-          <dd className="mt-1 text-2xl font-black">{formatNumber(summary.corpus.review)}</dd>
+          <dt className="text-sm text-foreground/60">Reviewing</dt>
+          <dd className="mt-1 text-2xl font-black">{formatNumber(summary.corpus.reviewing)}</dd>
+        </div>
+        <div>
+          <dt className="text-sm font-bold text-accent">Mastered</dt>
+          <dd className="mt-1 text-2xl font-black text-accent">
+            {formatNumber(summary.corpus.mastered)}
+          </dd>
         </div>
         <div>
           <dt className="text-sm text-foreground/60">Unseen</dt>

@@ -59,8 +59,9 @@ function isLearningProgressSummary(value: unknown): value is LearningProgressSum
     isNonnegativeInteger(corpus.total) &&
     isNonnegativeInteger(corpus.unseen) &&
     isNonnegativeInteger(corpus.learning) &&
-    isNonnegativeInteger(corpus.review) &&
-    corpus.unseen + corpus.learning + corpus.review === corpus.total;
+    isNonnegativeInteger(corpus.reviewing) &&
+    isNonnegativeInteger(corpus.mastered) &&
+    corpus.unseen + corpus.learning + corpus.reviewing + corpus.mastered === corpus.total;
   const seen = corpus.total - corpus.unseen;
   const validActionable =
     isNonnegativeInteger(actionable.due_now) &&
@@ -147,9 +148,10 @@ function isLearningInsights(value: unknown): value is LearningInsights {
       isDateString(week.ends_on) &&
       isNonnegativeInteger(week.unseen) &&
       isNonnegativeInteger(week.learning) &&
-      isNonnegativeInteger(week.review);
+      isNonnegativeInteger(week.reviewing) &&
+      isNonnegativeInteger(week.mastered);
     if (valid) {
-      corpusTotals.add(week.unseen + week.learning + week.review);
+      corpusTotals.add(week.unseen + week.learning + week.reviewing + week.mastered);
     }
     return valid;
   });

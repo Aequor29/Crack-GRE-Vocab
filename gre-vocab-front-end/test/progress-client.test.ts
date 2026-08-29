@@ -15,7 +15,8 @@ const summary: LearningProgressSummary = {
     total: 3034,
     unseen: 3000,
     learning: 20,
-    review: 14,
+    reviewing: 9,
+    mastered: 5,
   },
   actionable: {
     due_now: 7,
@@ -43,7 +44,8 @@ function weeklyCurve(): LearningInsights["learning_curve"] {
       ends_on: endsAt.toISOString().slice(0, 10),
       unseen: 3000 - index,
       learning: index,
-      review: 34,
+      reviewing: 29,
+      mastered: 5,
     };
   });
 }
@@ -53,7 +55,7 @@ const insights: LearningInsights = {
   timezone: "America/Chicago",
   review_recall: {
     current: {
-      starts_on: "2026-07-31",
+      starts_on: "2026-08-23",
       ends_on: "2026-08-29",
       remembered: 8,
       answers: 10,
@@ -61,8 +63,8 @@ const insights: LearningInsights = {
       has_sufficient_data: true,
     },
     previous: {
-      starts_on: "2026-07-01",
-      ends_on: "2026-07-30",
+      starts_on: "2026-08-16",
+      ends_on: "2026-08-22",
       remembered: 6,
       answers: 10,
       rate_percent: 60,

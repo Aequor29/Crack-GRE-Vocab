@@ -166,11 +166,14 @@ function StudyDaysCard({ consistency }: { consistency: StudyConsistency }) {
 }
 
 function learningCurvePoints(curve: WeeklyLearningCurvePoint[]): string {
-  const maximumSeen = Math.max(1, ...curve.map((week) => week.learning + week.review));
+  const maximumSeen = Math.max(
+    1,
+    ...curve.map((week) => week.learning + week.reviewing + week.mastered),
+  );
   return curve
     .map((week, index) => {
       const x = 12 + (index * 576) / Math.max(1, curve.length - 1);
-      const seen = week.learning + week.review;
+      const seen = week.learning + week.reviewing + week.mastered;
       const y = 140 - (seen * 116) / maximumSeen;
       return `${x},${y}`;
     })
@@ -180,8 +183,8 @@ function learningCurvePoints(curve: WeeklyLearningCurvePoint[]): string {
 function LearningCurveCard({ curve }: { curve: WeeklyLearningCurvePoint[] }) {
   const latest = curve.at(-1);
   const first = curve[0];
-  const latestSeen = latest ? latest.learning + latest.review : 0;
-  const firstSeen = first ? first.learning + first.review : 0;
+  const latestSeen = latest ? latest.learning + latest.reviewing + latest.mastered : 0;
+  const firstSeen = first ? first.learning + first.reviewing + first.mastered : 0;
   return (
     <Card className="rounded-[2rem] p-7 sm:p-9 lg:col-span-2" variant="secondary">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -215,14 +218,15 @@ function LearningCurveCard({ curve }: { curve: WeeklyLearningCurvePoint[] }) {
       {latest && (
         <p className="mt-2 font-bold">
           {numberFormatter.format(latestSeen)} seen · {numberFormatter.format(latest.learning)}{" "}
-          learning · {numberFormatter.format(latest.review)} review
+          learning · {numberFormatter.format(latest.reviewing)} reviewing ·{" "}
+          {numberFormatter.format(latest.mastered)} mastered
         </p>
       )}
       <ol className="sr-only">
         {curve.map((week) => (
           <li key={week.starts_on}>
             Week of {formatCalendarDate(week.starts_on)}: {week.unseen} unseen, {week.learning}{" "}
-            learning, {week.review} review.
+            learning, {week.reviewing} reviewing, {week.mastered} mastered.
           </li>
         ))}
       </ol>

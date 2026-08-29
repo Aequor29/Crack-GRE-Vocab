@@ -52,7 +52,8 @@ class LearningProgressApiTests(TestCase):
                     "total": 3,
                     "unseen": 3,
                     "learning": 0,
-                    "review": 0,
+                    "reviewing": 0,
+                    "mastered": 0,
                 },
                 "actionable": {
                     "due_now": 0,
@@ -68,6 +69,57 @@ class LearningProgressApiTests(TestCase):
                     "remembered": 0,
                     "forgot": 0,
                 },
+            },
+        )
+
+    def test_summary_separates_mastered_words_from_words_still_reviewing(self):
+        self.corpus.is_active = False
+        self.corpus.save(update_fields=("is_active",))
+        corpus, entries = create_corpus(
+            ("ephemeral", "laconic", "mendacious", "obdurate"),
+            version="mastery-test-v1",
+        )
+        observed_at = datetime(2026, 8, 29, 18, tzinfo=UTC)
+        states = (
+            ("review", 3, timedelta(days=30)),
+            ("review", 2, timedelta(days=30)),
+            ("review", 3, timedelta(days=29)),
+            ("relearning", 3, timedelta(days=30)),
+        )
+        for entry, (phase, review_count, interval) in zip(
+            entries,
+            states,
+            strict=True,
+        ):
+            last_reviewed_at = observed_at - timedelta(days=1)
+            LearnerWordState.objects.create(
+                learner=self.learner,
+                word=entry.word,
+                phase=phase,
+                review_count=review_count,
+                last_reviewed_at=last_reviewed_at,
+                next_due_at=last_reviewed_at + interval,
+                scheduler_version="test-scheduler",
+                scheduler_state={"step": 1},
+            )
+
+        self.client.force_login(self.learner)
+        with patch("progress.services.current_time", return_value=observed_at):
+            response = self.client.get(
+                reverse("progress:summary"),
+                {"timezone": "America/Chicago"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["corpus"],
+            {
+                "version": corpus.version,
+                "total": 4,
+                "unseen": 0,
+                "learning": 1,
+                "reviewing": 2,
+                "mastered": 1,
             },
         )
 
@@ -187,7 +239,8 @@ class LearningProgressApiTests(TestCase):
                 "total": 3,
                 "unseen": 0,
                 "learning": 2,
-                "review": 1,
+                "reviewing": 1,
+                "mastered": 0,
             },
         )
         self.assertEqual(
@@ -274,6 +327,8 @@ class LearningInsightsApiTests(TestCase):
         previous_phase: str,
         next_phase: str = "review",
         entry_index: int = 0,
+        review_number: int | None = None,
+        next_interval: timedelta = timedelta(days=1),
     ) -> None:
         is_initial_learning = previous_phase == ""
         session = StudySession.objects.create(
@@ -311,14 +366,14 @@ class LearningInsightsApiTests(TestCase):
         )
         RecallOutcome.objects.create(
             answer=answer,
-            review_number=1 if is_initial_learning else 2,
+            review_number=review_number or (1 if is_initial_learning else 2),
             scheduler_version="test-scheduler",
             previous_phase=previous_phase,
             next_phase=next_phase,
             previous_due_at=(
                 None if is_initial_learning else occurred_at - timedelta(days=1)
             ),
-            next_due_at=occurred_at + timedelta(days=1),
+            next_due_at=occurred_at + next_interval,
             previous_state={} if is_initial_learning else {"step": 1},
             next_state={"step": 2},
             occurred_at=occurred_at,
@@ -464,24 +519,45 @@ class LearningInsightsApiTests(TestCase):
 
     def test_learning_curve_reports_weekly_corpus_phase_snapshots(self):
         observed_at = datetime(2026, 11, 2, 18, tzinfo=UTC)
-        for occurred_at, previous_phase, next_phase, entry_index in (
+        for (
+            occurred_at,
+            previous_phase,
+            next_phase,
+            entry_index,
+            review_number,
+            next_interval,
+        ) in (
             (
                 datetime(2026, 8, 18, 18, tzinfo=UTC),
                 "",
                 "learning",
                 0,
+                1,
+                timedelta(minutes=10),
             ),
             (
                 datetime(2026, 8, 24, 18, tzinfo=UTC),
                 "learning",
                 "review",
                 0,
+                2,
+                timedelta(days=1),
+            ),
+            (
+                datetime(2026, 10, 31, 17, tzinfo=UTC),
+                "review",
+                "review",
+                0,
+                3,
+                timedelta(days=30),
             ),
             (
                 datetime(2026, 10, 31, 18, tzinfo=UTC),
                 "",
                 "learning",
                 1,
+                1,
+                timedelta(minutes=10),
             ),
         ):
             self.create_outcome(
@@ -490,6 +566,8 @@ class LearningInsightsApiTests(TestCase):
                 previous_phase=previous_phase,
                 next_phase=next_phase,
                 entry_index=entry_index,
+                review_number=review_number,
+                next_interval=next_interval,
             )
 
         with patch("progress.services.current_time", return_value=observed_at):
@@ -510,7 +588,8 @@ class LearningInsightsApiTests(TestCase):
                 "ends_on": "2026-08-23",
                 "unseen": 1,
                 "learning": 1,
-                "review": 0,
+                "reviewing": 0,
+                "mastered": 0,
             },
         )
 
@@ -521,7 +600,8 @@ class LearningInsightsApiTests(TestCase):
                 "ends_on": "2026-08-30",
                 "unseen": 1,
                 "learning": 0,
-                "review": 1,
+                "reviewing": 1,
+                "mastered": 0,
             },
         )
         self.assertEqual(
@@ -531,7 +611,8 @@ class LearningInsightsApiTests(TestCase):
                 "ends_on": "2026-11-02",
                 "unseen": 0,
                 "learning": 1,
-                "review": 1,
+                "reviewing": 0,
+                "mastered": 1,
             },
         )
 

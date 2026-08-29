@@ -74,7 +74,9 @@ export interface CorpusProgress {
   /** @min 0 */
   learning: number;
   /** @min 0 */
-  review: number;
+  reviewing: number;
+  /** @min 0 */
+  mastered: number;
 }
 
 export interface CreateStudySessionRequest {
@@ -406,5 +408,7 @@ export interface WeeklyLearningCurvePoint {
   /** @min 0 */
   learning: number;
   /** @min 0 */
-  review: number;
+  reviewing: number;
+  /** @min 0 */
+  mastered: number;
 }

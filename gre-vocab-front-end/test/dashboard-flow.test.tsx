@@ -27,7 +27,8 @@ const progress: LearningProgressSummary = {
     total: 3034,
     unseen: 3000,
     learning: 20,
-    review: 14,
+    reviewing: 9,
+    mastered: 5,
   },
   actionable: {
     due_now: 7,
@@ -55,7 +56,8 @@ function weeklyCurve(): LearningInsights["learning_curve"] {
       ends_on: endsAt.toISOString().slice(0, 10),
       unseen: 3000 - index,
       learning: index,
-      review: 34,
+      reviewing: 29,
+      mastered: 5,
     };
   });
 }
@@ -115,7 +117,8 @@ const emptyInsights: LearningInsights = {
     ...week,
     unseen: 3034,
     learning: 0,
-    review: 0,
+    reviewing: 0,
+    mastered: 0,
   })),
 };
 
@@ -148,6 +151,8 @@ describe("dashboard shell", () => {
     expect(await screen.findByText("Learning progress")).toBeInTheDocument();
     expect(screen.queryByText("Corpus coverage")).not.toBeInTheDocument();
     expect(screen.getByText("34 of 3,034 words seen")).toBeInTheDocument();
+    expect(screen.getByText("Reviewing").closest("div")).toHaveTextContent("Reviewing9");
+    expect(screen.getByText("Mastered").closest("div")).toHaveTextContent("Mastered5");
     expect(screen.getByText("11 due today")).toBeInTheDocument();
     expect(screen.getByText("8 answers")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Recent recall" })).not.toBeInTheDocument();
@@ -174,7 +179,7 @@ describe("dashboard shell", () => {
   it("gives a new learner a clear first action without fake history", async () => {
     progressApi.getLearningProgress.mockResolvedValue({
       ...progress,
-      corpus: { ...progress.corpus, unseen: 3034, learning: 0, review: 0 },
+      corpus: { ...progress.corpus, unseen: 3034, learning: 0, reviewing: 0, mastered: 0 },
       actionable: { due_now: 0, due_today: 0, has_active_session: false },
       today: {
         ...progress.today,

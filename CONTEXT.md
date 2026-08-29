@@ -41,8 +41,16 @@ A Word whose current scheduling phase is learning or relearning.
 _Avoid_: In-progress Word
 
 **Review Word**:
-A Word whose current scheduling phase is review.
-_Avoid_: Learned Word, mastered Word
+A Word whose current scheduling phase is review, including Reviewing Words and Mastered Words.
+_Avoid_: Learned Word
+
+**Reviewing Word**:
+A Review Word that has not yet demonstrated the durable recall required of a Mastered Word.
+_Avoid_: Learned Word, Mature Word
+
+**Mastered Word**:
+A Review Word with at least three accepted Recall Answers and a current review interval of at least 30 days.
+_Avoid_: Known Word, Finished Word
 
 **Due Now**:
 A scheduled Word whose next review time is at or before the Learning Progress snapshot time.
@@ -65,5 +73,5 @@ The uninterrupted count of Study Days through today, or through yesterday while 
 _Avoid_: Attendance streak
 
 **Learning Curve**:
-A week-by-week history of how the active Vocabulary Corpus is distributed across Unseen, Learning, and Review Words.
+A week-by-week history of how the active Vocabulary Corpus is distributed across Unseen, Learning, Reviewing, and Mastered Words.
 _Avoid_: Score history, mastery curve

@@ -2,24 +2,24 @@
 
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from accounts.models import LearnerAccount
 from django.utils.timezone import now as current_time
 from vocabulary.models import CorpusVersion
 
+from .mastery import is_mastered_word
 from .selectors import (
-    WordPhaseChange,
+    WordProgressState,
     count_corpus_progress,
     count_review_recall_periods,
     count_today_activity,
     get_active_corpus,
     learner_has_active_session,
-    list_latest_word_phases_before,
+    list_latest_word_states_before,
     list_study_dates,
     list_study_day_activity,
-    list_word_phase_changes,
+    list_word_state_changes,
 )
 
 REVIEW_RECALL_PERIOD_DAYS = 7
@@ -212,10 +212,10 @@ def _weekly_learning_curve(
     calendar_starts_on: date,
     learner_timezone: ZoneInfo,
     corpus_total: int,
-    starting_phases: tuple[tuple[UUID, str], ...],
-    phase_changes: tuple[WordPhaseChange, ...],
+    starting_states: tuple[WordProgressState, ...],
+    state_changes: tuple[WordProgressState, ...],
 ) -> list[dict[str, object]]:
-    phases = dict(starting_phases)
+    states = {state.word_id: state for state in starting_states}
     change_index = 0
     curve: list[dict[str, object]] = []
     for week_index in range(INSIGHTS_CALENDAR_WEEKS):
@@ -226,21 +226,33 @@ def _weekly_learning_curve(
             learner_timezone=learner_timezone,
         )
         while (
-            change_index < len(phase_changes)
-            and phase_changes[change_index].occurred_at < snapshot_ends_at
+            change_index < len(state_changes)
+            and state_changes[change_index].occurred_at < snapshot_ends_at
         ):
-            change = phase_changes[change_index]
-            phases[change.word_id] = change.next_phase
+            change = state_changes[change_index]
+            states[change.word_id] = change
             change_index += 1
-        review = sum(phase == "review" for phase in phases.values())
-        learning = sum(phase in {"learning", "relearning"} for phase in phases.values())
+        mastered = sum(
+            is_mastered_word(
+                phase=state.phase,
+                review_count=state.review_count,
+                last_reviewed_at=state.occurred_at,
+                next_due_at=state.next_due_at,
+            )
+            for state in states.values()
+        )
+        reviewing = sum(state.phase == "review" for state in states.values()) - mastered
+        learning = sum(
+            state.phase in {"learning", "relearning"} for state in states.values()
+        )
         curve.append(
             {
                 "starts_on": starts_on.isoformat(),
                 "ends_on": ends_on.isoformat(),
-                "unseen": max(0, corpus_total - len(phases)),
+                "unseen": max(0, corpus_total - len(states)),
                 "learning": learning,
-                "review": review,
+                "reviewing": reviewing,
+                "mastered": mastered,
             }
         )
     return curve
@@ -253,12 +265,12 @@ def _build_weekly_learning_curve(
     window: LearningInsightsWindow,
     learner_timezone: ZoneInfo,
 ) -> list[dict[str, object]]:
-    starting_phases = list_latest_word_phases_before(
+    starting_states = list_latest_word_states_before(
         learner=learner,
         corpus=corpus,
         before=window.curve_starts_at,
     )
-    phase_changes = list_word_phase_changes(
+    state_changes = list_word_state_changes(
         learner=learner,
         corpus=corpus,
         starts_at=window.curve_starts_at,
@@ -269,8 +281,8 @@ def _build_weekly_learning_curve(
         calendar_starts_on=window.calendar_starts_on,
         learner_timezone=learner_timezone,
         corpus_total=corpus.entries.count(),
-        starting_phases=starting_phases,
-        phase_changes=phase_changes,
+        starting_states=starting_states,
+        state_changes=state_changes,
     )
 
 
@@ -352,7 +364,8 @@ def build_learning_progress_summary(
             "total": corpus_counts.total,
             "unseen": corpus_counts.unseen,
             "learning": corpus_counts.learning,
-            "review": corpus_counts.review,
+            "reviewing": corpus_counts.reviewing,
+            "mastered": corpus_counts.mastered,
         },
         "actionable": {
             "due_now": corpus_counts.due_now,

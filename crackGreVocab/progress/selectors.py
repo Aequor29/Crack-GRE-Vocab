@@ -16,6 +16,8 @@ from study.models import (
 )
 from vocabulary.models import CorpusVersion
 
+from .mastery import mastered_word_condition
+
 
 @dataclass(frozen=True)
 class CorpusProgressCounts:
@@ -24,7 +26,8 @@ class CorpusProgressCounts:
     total: int
     unseen: int
     learning: int
-    review: int
+    reviewing: int
+    mastered: int
     due_now: int
     due_today: int
 
@@ -60,12 +63,14 @@ class StudyDayCounts:
 
 
 @dataclass(frozen=True)
-class WordPhaseChange:
-    """One Word's persisted scheduling phase transition."""
+class WordProgressState:
+    """One Word's persisted scheduling state after a Recall Outcome."""
 
     word_id: UUID
     occurred_at: datetime
-    next_phase: str
+    phase: str
+    review_count: int
+    next_due_at: datetime
 
 
 def get_active_corpus() -> CorpusVersion | None:
@@ -96,16 +101,19 @@ def count_corpus_progress(
                 )
             ),
         ),
-        review=Count("id", filter=Q(phase=SchedulingPhase.REVIEW)),
+        review_phase=Count("id", filter=Q(phase=SchedulingPhase.REVIEW)),
+        mastered=Count("id", filter=mastered_word_condition()),
         due_now=Count("id", filter=Q(next_due_at__lte=observed_at)),
         due_today=Count("id", filter=Q(next_due_at__lt=local_day_ends_at)),
     )
     seen = aggregates["seen"] or 0
+    mastered = aggregates["mastered"] or 0
     return CorpusProgressCounts(
         total=total,
         unseen=max(0, total - seen),
         learning=aggregates["learning"] or 0,
-        review=aggregates["review"] or 0,
+        reviewing=(aggregates["review_phase"] or 0) - mastered,
+        mastered=mastered,
         due_now=aggregates["due_now"] or 0,
         due_today=aggregates["due_today"] or 0,
     )
@@ -256,15 +264,15 @@ def list_study_dates(
     )
 
 
-def list_latest_word_phases_before(
+def list_latest_word_states_before(
     *,
     learner: LearnerAccount,
     corpus: CorpusVersion,
     before: datetime,
-) -> tuple[tuple[UUID, str], ...]:
-    """Return each encountered Word's last phase before a bounded curve window."""
+) -> tuple[WordProgressState, ...]:
+    """Return each encountered Word's last state before a bounded curve window."""
     word_id = "answer__item__corpus_entry__word_id"
-    return tuple(
+    rows = (
         RecallOutcome.objects.filter(
             answer__item__session__learner=learner,
             answer__item__corpus_entry__word__corpus_entries__corpus=corpus,
@@ -272,18 +280,34 @@ def list_latest_word_phases_before(
         )
         .order_by(word_id, "-occurred_at", "-id")
         .distinct(word_id)
-        .values_list(word_id, "next_phase")
+        .values_list(
+            word_id,
+            "occurred_at",
+            "next_phase",
+            "review_number",
+            "next_due_at",
+        )
+    )
+    return tuple(
+        WordProgressState(
+            word_id=word_id,
+            occurred_at=occurred_at,
+            phase=phase,
+            review_count=review_count,
+            next_due_at=next_due_at,
+        )
+        for word_id, occurred_at, phase, review_count, next_due_at in rows
     )
 
 
-def list_word_phase_changes(
+def list_word_state_changes(
     *,
     learner: LearnerAccount,
     corpus: CorpusVersion,
     starts_at: datetime,
     ends_at: datetime,
-) -> tuple[WordPhaseChange, ...]:
-    """Return ordered phase transitions inside a bounded curve window."""
+) -> tuple[WordProgressState, ...]:
+    """Return ordered Word states inside a bounded curve window."""
     rows = RecallOutcome.objects.filter(
         answer__item__session__learner=learner,
         answer__item__corpus_entry__word__corpus_entries__corpus=corpus,
@@ -291,14 +315,18 @@ def list_word_phase_changes(
         occurred_at__lt=ends_at,
     ).order_by("occurred_at", "id")
     return tuple(
-        WordPhaseChange(
+        WordProgressState(
             word_id=word_id,
             occurred_at=occurred_at,
-            next_phase=next_phase,
+            phase=phase,
+            review_count=review_count,
+            next_due_at=next_due_at,
         )
-        for word_id, occurred_at, next_phase in rows.values_list(
+        for word_id, occurred_at, phase, review_count, next_due_at in rows.values_list(
             "answer__item__corpus_entry__word_id",
             "occurred_at",
             "next_phase",
+            "review_number",
+            "next_due_at",
         )
     )

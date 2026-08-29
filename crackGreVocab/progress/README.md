@@ -6,12 +6,18 @@ The `progress` app owns read-only, backend-authoritative views of current Learni
 
 Review Recall Rate is `Remembered / accepted Review-phase Recall Answers` for a learner-local date range.
 
-- The current period contains today and the preceding 29 local dates.
-- The comparison period is the immediately preceding 30 local dates.
+- The current period contains today and the preceding 6 local dates.
+- The comparison period is the immediately preceding 7 local dates.
 - An answer counts only when its Recall Outcome began in the `review` phase. Initial learning, learning, and relearning answers are excluded.
 - A period with no qualifying answers has no percentage.
 - A percentage based on fewer than 10 qualifying answers is returned as an early trend. The period-to-period change is shown only when both periods contain at least 10 qualifying answers.
 - Change is expressed as percentage points, not percent growth.
+
+## Mastered Words
+
+A Mastered Word is a Review Word with at least three accepted Recall Answers whose current scheduled review interval is at least 30 days. The interval is the duration from its last accepted review to its next due time.
+
+Mastery is a derived Learning Progress classification, not a scheduling phase. A Review Word that does not satisfy every mastery condition is a Reviewing Word. Learning, Reviewing, Mastered, and Unseen counts are mutually exclusive and together equal the active Vocabulary Corpus total.
 
 ## Study Days and Current Study Streak
 
@@ -27,6 +33,7 @@ Each point is a snapshot of the active Vocabulary Corpus:
 
 - `unseen`: Words without an accepted Recall Outcome by the end of the week;
 - `learning`: Words whose latest outcome ends in learning or relearning;
-- `review`: Words whose latest outcome ends in review.
+- `reviewing`: Reviewing Words whose latest outcome ends in review but does not satisfy the mastery policy;
+- `mastered`: Mastered Words whose latest outcome satisfies the mastery policy.
 
-History follows stable Word identity across Vocabulary Corpus releases. The backend reconstructs the first point from at most one pre-window outcome per active-corpus Word, then applies only phase transitions inside the 12-week window. Calendar activity and Review Recall Rate use bounded date-range aggregations; the Current Study Streak reads distinct Study Days rather than individual answers.
+History follows stable Word identity across Vocabulary Corpus releases. The backend reconstructs the first point from at most one pre-window outcome per active-corpus Word, then applies scheduling-state transitions inside the 12-week window. Calendar activity and Review Recall Rate use bounded date-range aggregations; the Current Study Streak reads distinct Study Days rather than individual answers.

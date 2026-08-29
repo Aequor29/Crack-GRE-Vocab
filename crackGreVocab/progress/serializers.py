@@ -24,7 +24,8 @@ class CorpusProgressSerializer(serializers.Serializer):
     total = serializers.IntegerField(min_value=0)
     unseen = serializers.IntegerField(min_value=0)
     learning = serializers.IntegerField(min_value=0)
-    review = serializers.IntegerField(min_value=0)
+    reviewing = serializers.IntegerField(min_value=0)
+    mastered = serializers.IntegerField(min_value=0)
 
 
 class ActionableProgressSerializer(serializers.Serializer):
@@ -86,7 +87,8 @@ class WeeklyLearningCurvePointSerializer(serializers.Serializer):
     ends_on = serializers.DateField()
     unseen = serializers.IntegerField(min_value=0)
     learning = serializers.IntegerField(min_value=0)
-    review = serializers.IntegerField(min_value=0)
+    reviewing = serializers.IntegerField(min_value=0)
+    mastered = serializers.IntegerField(min_value=0)
 
 
 class LearningInsightsSerializer(serializers.Serializer):
