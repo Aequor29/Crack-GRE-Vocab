@@ -58,11 +58,13 @@ describe("dashboard shell", () => {
     progressApi.getLearningProgress.mockResolvedValue(progress);
   });
 
-  it("shows actionable coverage and today's work without recall clutter", async () => {
+  it("shows learning progress and today's work without recall clutter", async () => {
     render(<DashboardShell />);
 
     expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
-    expect(await screen.findByText("34 of 3,034 words seen")).toBeInTheDocument();
+    expect(await screen.findByText("Learning progress")).toBeInTheDocument();
+    expect(screen.queryByText("Corpus coverage")).not.toBeInTheDocument();
+    expect(screen.getByText("34 of 3,034 words seen")).toBeInTheDocument();
     expect(screen.getByText("11 due today")).toBeInTheDocument();
     expect(screen.getByText("8 answers")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Recent recall" })).not.toBeInTheDocument();
