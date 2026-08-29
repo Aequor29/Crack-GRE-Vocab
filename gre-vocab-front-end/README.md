@@ -1,9 +1,8 @@
 # Crack GRE Vocab frontend
 
-This directory contains the clean, local-only Next.js application for the
-private cold rebuild. It includes the typed readiness path and email/password
-Learner Account screens backed by Django sessions. Dashboard, study, and hosted
-behavior remain outside this slice.
+This directory contains the local Next.js application for the private cold
+rebuild. It includes Learner Account screens, a protected dashboard shell, and
+the study-session experience. Hosted behavior remains outside this milestone.
 
 ## Supported toolchain
 
@@ -25,11 +24,11 @@ npm run dev
 ```
 
 Start Django as described in the repository README, then open
-<http://localhost:3000>. The application routes are `/`, `/sign-up`, `/sign-in`,
-the protected `/account`, and `/study`; retired prototype routes return the
-standard not-found state. Sign-in and sign-up offer Google OIDC when Django has
-fresh local provider credentials configured. A matching password account pauses
-at an explicit current-password confirmation before Google is linked.
+<http://localhost:3000>. The root route sends learners to the protected
+`/dashboard`; additional routes include `/sign-up`, `/sign-in`, `/account`, and
+`/study`. Sign-in and sign-up offer Google OIDC when Django has fresh local
+provider credentials configured. A matching password account pauses at an
+explicit current-password confirmation before Google is linked.
 
 Password recovery is available at `/forgot-password`; emailed links open
 `/reset-password/confirm` with opaque identity and token parameters. Completing
@@ -38,9 +37,9 @@ a reset invalidates every existing server session and returns the learner to
 
 `NEXT_PUBLIC_API_BASE_URL` is a public, local-only origin such as
 `http://localhost:8000`. The browser calls Django directly through its exact
-local-origin CORS policy. The page reports ready, database unavailable, or
-backend unavailable without displaying exception or connection details, and
-expected outages can be retried manually.
+local-origin CORS policy. Account, dashboard, and study surfaces report service
+failures without exposing infrastructure details and offer recovery where the
+learner can safely retry.
 
 Use the same hostname form for both processes. `localhost:3000` pairs with
 `localhost:8000`; if you choose `127.0.0.1:3000`, change the API origin to
@@ -60,9 +59,9 @@ npm run build
 npm run start
 ```
 
-The focused tests cover the shell and readiness states plus the typed account
-request contract, session restoration, protected account behavior, accessible
-form errors, and sign out. Product feature tests belong with the features they
+The focused tests cover the application shell, dashboard access, typed account
+and study contracts, protected account behavior, accessible form errors, study
+recovery, and sign out. Product feature tests stay with the behavior they
 exercise.
 
 ## Typed API contract

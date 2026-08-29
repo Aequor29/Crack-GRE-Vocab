@@ -16,7 +16,7 @@ describe("theme switcher", () => {
     const button = screen.getByRole("button", {
       name: "Theme is Light. Change to Dark.",
     });
-    expect(button).toHaveTextContent("");
+    expect(button).not.toHaveTextContent(/\S/);
     expect(button.querySelector("svg")).toBeInTheDocument();
 
     fireEvent.click(button);

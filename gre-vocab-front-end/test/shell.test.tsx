@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import HomePage from "@/app/page";
@@ -8,18 +8,17 @@ const navigation = vi.hoisted(() => ({ redirect: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ redirect: navigation.redirect }));
 describe("application shell", () => {
-  it("keeps only dashboard and study in primary navigation", () => {
+  it("offers dashboard and study as the complete primary navigation", () => {
     render(<SiteHeader />);
 
-    expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
+    const primaryNavigation = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(primaryNavigation).getAllByRole("link")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Crack GRE Vocab home" })).toHaveAttribute(
       "href",
       "/dashboard",
     );
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
     expect(screen.getByRole("link", { name: "Study" })).toHaveAttribute("href", "/study");
-    expect(screen.queryByRole("link", { name: "Rebuild status" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Principles" })).not.toBeInTheDocument();
   });
 
   it("routes the root page to the dashboard", () => {

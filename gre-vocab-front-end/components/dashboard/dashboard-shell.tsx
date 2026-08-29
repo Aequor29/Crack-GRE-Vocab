@@ -53,11 +53,9 @@ export function DashboardShell() {
   return (
     <section aria-labelledby="dashboard-title" className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-5">
-        <div>
-          <h1 className="text-4xl font-black tracking-[-0.04em] sm:text-5xl" id="dashboard-title">
-            Dashboard
-          </h1>
-        </div>
+        <h1 className="text-4xl font-black tracking-[-0.04em] sm:text-5xl" id="dashboard-title">
+          Dashboard
+        </h1>
         <Link
           className="font-bold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           href="/account"

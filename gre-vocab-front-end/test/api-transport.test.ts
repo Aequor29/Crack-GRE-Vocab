@@ -31,18 +31,6 @@ describe("API transport", () => {
     );
   });
 
-  it("supports public readiness GETs without sending browser credentials", async () => {
-    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ ready: true }));
-
-    await getApiJson("/api/readiness/", { fetcher }, "omit");
-
-    expect(fetcher).toHaveBeenCalledWith(
-      "http://localhost:8000/api/readiness/",
-      expect.objectContaining({ credentials: "omit", method: "GET" }),
-    );
-  });
-
   it("obtains a fresh credentialed CSRF token before a JSON mutation", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
     const fetcher = vi

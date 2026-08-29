@@ -45,7 +45,7 @@ describe("dashboard shell", () => {
     await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/sign-in"));
   });
 
-  it("offers recovery when the local backend is unavailable", () => {
+  it("offers recovery when the dashboard cannot load", () => {
     auth.account = null;
     auth.status = "unavailable";
 
