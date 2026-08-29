@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LearningProgressSummary } from "@/lib/api/generated/schema.generated";
-import { getLearningProgress, type ProgressApiError } from "@/lib/api/progress";
+import type {
+  LearningInsights,
+  LearningProgressSummary,
+} from "@/lib/api/generated/schema.generated";
+import {
+  getLearningInsights,
+  getLearningProgress,
+  type ProgressApiError,
+} from "@/lib/api/progress";
 
 const summary: LearningProgressSummary = {
   corpus: {
@@ -26,6 +33,52 @@ const summary: LearningProgressSummary = {
   },
 };
 
+function weeklyCurve(): LearningInsights["learning_curve"] {
+  return Array.from({ length: 12 }, (_, index) => {
+    const startsAt = new Date(Date.UTC(2026, 5, 8 + index * 7));
+    const endsAt = new Date(startsAt);
+    endsAt.setUTCDate(endsAt.getUTCDate() + (index === 11 ? 5 : 6));
+    return {
+      starts_on: startsAt.toISOString().slice(0, 10),
+      ends_on: endsAt.toISOString().slice(0, 10),
+      unseen: 3000 - index,
+      learning: index,
+      review: 34,
+    };
+  });
+}
+
+const insights: LearningInsights = {
+  as_of_date: "2026-08-29",
+  timezone: "America/Chicago",
+  review_recall: {
+    current: {
+      starts_on: "2026-07-31",
+      ends_on: "2026-08-29",
+      remembered: 8,
+      answers: 10,
+      rate_percent: 80,
+      has_sufficient_data: true,
+    },
+    previous: {
+      starts_on: "2026-07-01",
+      ends_on: "2026-07-30",
+      remembered: 6,
+      answers: 10,
+      rate_percent: 60,
+      has_sufficient_data: true,
+    },
+    change_percentage_points: 20,
+  },
+  consistency: {
+    calendar_starts_on: "2026-06-08",
+    calendar_ends_on: "2026-08-29",
+    current_streak_days: 3,
+    study_days: [{ date: "2026-08-29", answers: 5, words_practiced: 4 }],
+  },
+  learning_curve: weeklyCurve(),
+};
+
 const jsonResponse = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
@@ -44,6 +97,34 @@ describe("progress API client", () => {
       "http://localhost:8000/api/progress/summary/?timezone=America%2FChicago",
       expect.objectContaining({ credentials: "include", method: "GET" }),
     );
+  });
+
+  it("loads validated weekly insights for the requested IANA timezone", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(insights, 200));
+
+    await expect(getLearningInsights("America/Chicago", { fetcher })).resolves.toEqual(insights);
+    expect(fetcher).toHaveBeenCalledWith(
+      "http://localhost:8000/api/progress/insights/?timezone=America%2FChicago",
+      expect.objectContaining({ credentials: "include", method: "GET" }),
+    );
+  });
+
+  it("rejects incomplete weekly insights before the dashboard renders them", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          ...insights,
+          learning_curve: insights.learning_curve.slice(0, 11),
+        },
+        200,
+      ),
+    );
+
+    await expect(getLearningInsights("America/Chicago", { fetcher })).rejects.toMatchObject({
+      kind: "unavailable",
+    } satisfies Partial<ProgressApiError>);
   });
 
   it("rejects malformed nested progress before the dashboard renders it", async () => {
