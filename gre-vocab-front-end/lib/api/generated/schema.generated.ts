@@ -74,7 +74,9 @@ export interface CorpusProgress {
   /** @min 0 */
   learning: number;
   /** @min 0 */
-  review: number;
+  reviewing: number;
+  /** @min 0 */
+  mastered: number;
 }
 
 export interface CreateStudySessionRequest {
@@ -105,6 +107,15 @@ export interface LearnerAccount {
    */
   email: string;
   display_name: string;
+}
+
+export interface LearningInsights {
+  /** @format date */
+  as_of_date: string;
+  timezone: string;
+  review_recall: ReviewRecall;
+  consistency: StudyConsistency;
+  learning_curve: WeeklyLearningCurvePoint[];
 }
 
 export interface LearningProgressSummary {
@@ -207,6 +218,29 @@ export interface RecordRecallAnswerRequest {
   rating: RatingEnum;
 }
 
+export interface ReviewRecall {
+  current: ReviewRecallPeriod;
+  previous: ReviewRecallPeriod;
+  change_percentage_points: number | null;
+}
+
+export interface ReviewRecallPeriod {
+  /** @format date */
+  starts_on: string;
+  /** @format date */
+  ends_on: string;
+  /** @min 0 */
+  remembered: number;
+  /** @min 0 */
+  answers: number;
+  /**
+   * @min 0
+   * @max 100
+   */
+  rate_percent: number | null;
+  has_sufficient_data: boolean;
+}
+
 /** Describe the database-independent service document. */
 export interface ServiceIndex {
   service: string;
@@ -246,6 +280,25 @@ export interface StudyAnswerResponse {
   outcome: RecallOutcome;
   session: StudySession;
   replayed: boolean;
+}
+
+export interface StudyConsistency {
+  /** @format date */
+  calendar_starts_on: string;
+  /** @format date */
+  calendar_ends_on: string;
+  /** @min 0 */
+  current_streak_days: number;
+  study_days: StudyDay[];
+}
+
+export interface StudyDay {
+  /** @format date */
+  date: string;
+  /** @min 1 */
+  answers: number;
+  /** @min 1 */
+  words_practiced: number;
 }
 
 export interface StudyPlanningError {
@@ -343,4 +396,19 @@ export interface TodayProgress {
   remembered: number;
   /** @min 0 */
   forgot: number;
+}
+
+export interface WeeklyLearningCurvePoint {
+  /** @format date */
+  starts_on: string;
+  /** @format date */
+  ends_on: string;
+  /** @min 0 */
+  unseen: number;
+  /** @min 0 */
+  learning: number;
+  /** @min 0 */
+  reviewing: number;
+  /** @min 0 */
+  mastered: number;
 }

@@ -52,7 +52,8 @@ class LearningProgressApiTests(TestCase):
                     "total": 3,
                     "unseen": 3,
                     "learning": 0,
-                    "review": 0,
+                    "reviewing": 0,
+                    "mastered": 0,
                 },
                 "actionable": {
                     "due_now": 0,
@@ -68,6 +69,57 @@ class LearningProgressApiTests(TestCase):
                     "remembered": 0,
                     "forgot": 0,
                 },
+            },
+        )
+
+    def test_summary_separates_mastered_words_from_words_still_reviewing(self):
+        self.corpus.is_active = False
+        self.corpus.save(update_fields=("is_active",))
+        corpus, entries = create_corpus(
+            ("ephemeral", "laconic", "mendacious", "obdurate"),
+            version="mastery-test-v1",
+        )
+        observed_at = datetime(2026, 8, 29, 18, tzinfo=UTC)
+        states = (
+            ("review", 3, timedelta(days=30)),
+            ("review", 2, timedelta(days=30)),
+            ("review", 3, timedelta(days=29)),
+            ("relearning", 3, timedelta(days=30)),
+        )
+        for entry, (phase, review_count, interval) in zip(
+            entries,
+            states,
+            strict=True,
+        ):
+            last_reviewed_at = observed_at - timedelta(days=1)
+            LearnerWordState.objects.create(
+                learner=self.learner,
+                word=entry.word,
+                phase=phase,
+                review_count=review_count,
+                last_reviewed_at=last_reviewed_at,
+                next_due_at=last_reviewed_at + interval,
+                scheduler_version="test-scheduler",
+                scheduler_state={"step": 1},
+            )
+
+        self.client.force_login(self.learner)
+        with patch("progress.services.current_time", return_value=observed_at):
+            response = self.client.get(
+                reverse("progress:summary"),
+                {"timezone": "America/Chicago"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["corpus"],
+            {
+                "version": corpus.version,
+                "total": 4,
+                "unseen": 0,
+                "learning": 1,
+                "reviewing": 2,
+                "mastered": 1,
             },
         )
 
@@ -187,7 +239,8 @@ class LearningProgressApiTests(TestCase):
                 "total": 3,
                 "unseen": 0,
                 "learning": 2,
-                "review": 1,
+                "reviewing": 1,
+                "mastered": 0,
             },
         )
         self.assertEqual(
@@ -256,3 +309,321 @@ class LearningProgressApiTests(TestCase):
                 "retryable": True,
             },
         )
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class LearningInsightsApiTests(TestCase):
+    def setUp(self) -> None:
+        self.learner = create_learner()
+        self.corpus, self.entries = create_corpus(("abate", "lucid"))
+        self.client = Client()
+        self.client.force_login(self.learner)
+
+    def create_outcome(
+        self,
+        *,
+        occurred_at: datetime,
+        rating: str,
+        previous_phase: str,
+        next_phase: str = "review",
+        entry_index: int = 0,
+        review_number: int | None = None,
+        next_interval: timedelta = timedelta(days=1),
+    ) -> None:
+        is_initial_learning = previous_phase == ""
+        session = StudySession.objects.create(
+            learner=self.learner,
+            corpus=self.corpus,
+            status=StudySession.Status.COMPLETED,
+            new_word_target=0,
+            planner_version="test-planner",
+            ended_at=occurred_at,
+        )
+        item = StudySessionItem.objects.create(
+            session=session,
+            corpus_entry=self.entries[entry_index],
+            position=1,
+            kind=(
+                StudySessionItem.Kind.NEW
+                if is_initial_learning
+                else StudySessionItem.Kind.DUE
+            ),
+            due_at_snapshot=(
+                None if is_initial_learning else occurred_at - timedelta(days=1)
+            ),
+            scheduler_version="" if is_initial_learning else "test-scheduler",
+            scheduling_state_snapshot={} if is_initial_learning else {"step": 1},
+        )
+        answer = RecallAnswer.objects.create(
+            item=item,
+            rating=rating,
+            client_request_id=uuid.uuid4(),
+            submitted_at=datetime.now(UTC),
+        )
+        RecallAnswer.objects.filter(pk=answer.pk).update(
+            submitted_at=occurred_at,
+            accepted_at=occurred_at,
+        )
+        RecallOutcome.objects.create(
+            answer=answer,
+            review_number=review_number or (1 if is_initial_learning else 2),
+            scheduler_version="test-scheduler",
+            previous_phase=previous_phase,
+            next_phase=next_phase,
+            previous_due_at=(
+                None if is_initial_learning else occurred_at - timedelta(days=1)
+            ),
+            next_due_at=occurred_at + next_interval,
+            previous_state={} if is_initial_learning else {"step": 1},
+            next_state={"step": 2},
+            occurred_at=occurred_at,
+        )
+
+    def test_review_recall_compares_local_7_day_periods_and_excludes_learning(self):
+        observed_at = datetime(2026, 8, 29, 18, tzinfo=UTC)
+        for occurred_at, rating, previous_phase in (
+            (
+                datetime(2026, 8, 28, 18, tzinfo=UTC),
+                "remembered",
+                "review",
+            ),
+            (
+                datetime(2026, 8, 25, 18, tzinfo=UTC),
+                "forgot",
+                "review",
+            ),
+            (
+                datetime(2026, 8, 24, 18, tzinfo=UTC),
+                "remembered",
+                "learning",
+            ),
+            (
+                datetime(2026, 8, 20, 18, tzinfo=UTC),
+                "remembered",
+                "review",
+            ),
+            (
+                datetime(2026, 8, 18, 18, tzinfo=UTC),
+                "forgot",
+                "review",
+            ),
+        ):
+            self.create_outcome(
+                occurred_at=occurred_at,
+                rating=rating,
+                previous_phase=previous_phase,
+            )
+
+        with patch("progress.services.current_time", return_value=observed_at):
+            response = self.client.get(
+                reverse("progress:insights"),
+                {"timezone": "America/Chicago"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["review_recall"],
+            {
+                "current": {
+                    "starts_on": "2026-08-23",
+                    "ends_on": "2026-08-29",
+                    "remembered": 1,
+                    "answers": 2,
+                    "rate_percent": 50,
+                    "has_sufficient_data": False,
+                },
+                "previous": {
+                    "starts_on": "2026-08-16",
+                    "ends_on": "2026-08-22",
+                    "remembered": 1,
+                    "answers": 2,
+                    "rate_percent": 50,
+                    "has_sufficient_data": False,
+                },
+                "change_percentage_points": None,
+            },
+        )
+
+    def test_review_recall_shows_a_bounded_period_comparison_with_enough_data(self):
+        observed_at = datetime(2026, 8, 29, 18, tzinfo=UTC)
+        for index in range(10):
+            self.create_outcome(
+                occurred_at=datetime(2026, 8, 26, 18, index, tzinfo=UTC),
+                rating="remembered" if index < 8 else "forgot",
+                previous_phase="review",
+            )
+            self.create_outcome(
+                occurred_at=datetime(2026, 8, 20, 18, index, tzinfo=UTC),
+                rating="remembered" if index < 6 else "forgot",
+                previous_phase="review",
+            )
+
+        with (
+            patch("progress.services.current_time", return_value=observed_at),
+            CaptureQueriesContext(connection) as queries,
+        ):
+            response = self.client.get(
+                reverse("progress:insights"),
+                {"timezone": "America/Chicago"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(queries), 10)
+        recall = response.json()["review_recall"]
+        self.assertEqual(recall["current"]["rate_percent"], 80)
+        self.assertTrue(recall["current"]["has_sufficient_data"])
+        self.assertEqual(recall["previous"]["rate_percent"], 60)
+        self.assertTrue(recall["previous"]["has_sufficient_data"])
+        self.assertEqual(recall["change_percentage_points"], 20)
+
+    def test_study_days_and_current_streak_use_local_dates_across_dst(self):
+        observed_at = datetime(2026, 11, 2, 18, tzinfo=UTC)
+        for occurred_at in (
+            datetime(2026, 11, 1, 4, 30, tzinfo=UTC),
+            datetime(2026, 11, 1, 7, 30, tzinfo=UTC),
+            datetime(2026, 11, 1, 8, 30, tzinfo=UTC),
+        ):
+            self.create_outcome(
+                occurred_at=occurred_at,
+                rating="remembered",
+                previous_phase="review",
+            )
+
+        with patch("progress.services.current_time", return_value=observed_at):
+            response = self.client.get(
+                reverse("progress:insights"),
+                {"timezone": "America/Chicago"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["consistency"],
+            {
+                "calendar_starts_on": "2026-08-17",
+                "calendar_ends_on": "2026-11-02",
+                "current_streak_days": 2,
+                "study_days": [
+                    {
+                        "date": "2026-10-31",
+                        "answers": 1,
+                        "words_practiced": 1,
+                    },
+                    {
+                        "date": "2026-11-01",
+                        "answers": 2,
+                        "words_practiced": 1,
+                    },
+                ],
+            },
+        )
+
+    def test_learning_curve_reports_weekly_corpus_phase_snapshots(self):
+        observed_at = datetime(2026, 11, 2, 18, tzinfo=UTC)
+        for (
+            occurred_at,
+            previous_phase,
+            next_phase,
+            entry_index,
+            review_number,
+            next_interval,
+        ) in (
+            (
+                datetime(2026, 8, 18, 18, tzinfo=UTC),
+                "",
+                "learning",
+                0,
+                1,
+                timedelta(minutes=10),
+            ),
+            (
+                datetime(2026, 8, 24, 18, tzinfo=UTC),
+                "learning",
+                "review",
+                0,
+                2,
+                timedelta(days=1),
+            ),
+            (
+                datetime(2026, 10, 31, 17, tzinfo=UTC),
+                "review",
+                "review",
+                0,
+                3,
+                timedelta(days=30),
+            ),
+            (
+                datetime(2026, 10, 31, 18, tzinfo=UTC),
+                "",
+                "learning",
+                1,
+                1,
+                timedelta(minutes=10),
+            ),
+        ):
+            self.create_outcome(
+                occurred_at=occurred_at,
+                rating="remembered",
+                previous_phase=previous_phase,
+                next_phase=next_phase,
+                entry_index=entry_index,
+                review_number=review_number,
+                next_interval=next_interval,
+            )
+
+        with patch("progress.services.current_time", return_value=observed_at):
+            response = self.client.get(
+                reverse("progress:insights"),
+                {"timezone": "America/Chicago"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        curve_by_week = {
+            point["starts_on"]: point for point in response.json()["learning_curve"]
+        }
+        self.assertEqual(len(curve_by_week), 12)
+        self.assertEqual(
+            curve_by_week["2026-08-17"],
+            {
+                "starts_on": "2026-08-17",
+                "ends_on": "2026-08-23",
+                "unseen": 1,
+                "learning": 1,
+                "reviewing": 0,
+                "mastered": 0,
+            },
+        )
+
+        self.assertEqual(
+            curve_by_week["2026-08-24"],
+            {
+                "starts_on": "2026-08-24",
+                "ends_on": "2026-08-30",
+                "unseen": 1,
+                "learning": 0,
+                "reviewing": 1,
+                "mastered": 0,
+            },
+        )
+        self.assertEqual(
+            curve_by_week["2026-11-02"],
+            {
+                "starts_on": "2026-11-02",
+                "ends_on": "2026-11-02",
+                "unseen": 0,
+                "learning": 1,
+                "reviewing": 0,
+                "mastered": 1,
+            },
+        )
+
+    def test_insights_report_when_the_active_corpus_is_unavailable(self):
+        self.corpus.is_active = False
+        self.corpus.save(update_fields=("is_active",))
+
+        response = self.client.get(
+            reverse("progress:insights"),
+            {"timezone": "America/Chicago"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "progress_corpus_unavailable")

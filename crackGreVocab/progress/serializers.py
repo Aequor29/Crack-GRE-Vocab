@@ -24,7 +24,8 @@ class CorpusProgressSerializer(serializers.Serializer):
     total = serializers.IntegerField(min_value=0)
     unseen = serializers.IntegerField(min_value=0)
     learning = serializers.IntegerField(min_value=0)
-    review = serializers.IntegerField(min_value=0)
+    reviewing = serializers.IntegerField(min_value=0)
+    mastered = serializers.IntegerField(min_value=0)
 
 
 class ActionableProgressSerializer(serializers.Serializer):
@@ -47,6 +48,59 @@ class LearningProgressSummarySerializer(serializers.Serializer):
     corpus = CorpusProgressSerializer()
     actionable = ActionableProgressSerializer()
     today = TodayProgressSerializer()
+
+
+class ReviewRecallPeriodSerializer(serializers.Serializer):
+    starts_on = serializers.DateField()
+    ends_on = serializers.DateField()
+    remembered = serializers.IntegerField(min_value=0)
+    answers = serializers.IntegerField(min_value=0)
+    rate_percent = serializers.IntegerField(
+        min_value=0,
+        max_value=100,
+        allow_null=True,
+    )
+    has_sufficient_data = serializers.BooleanField()
+
+
+class ReviewRecallSerializer(serializers.Serializer):
+    current = ReviewRecallPeriodSerializer()
+    previous = ReviewRecallPeriodSerializer()
+    change_percentage_points = serializers.IntegerField(allow_null=True)
+
+
+class StudyDaySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    answers = serializers.IntegerField(min_value=1)
+    words_practiced = serializers.IntegerField(min_value=1)
+
+
+class StudyConsistencySerializer(serializers.Serializer):
+    calendar_starts_on = serializers.DateField()
+    calendar_ends_on = serializers.DateField()
+    current_streak_days = serializers.IntegerField(min_value=0)
+    study_days = StudyDaySerializer(many=True)
+
+
+class WeeklyLearningCurvePointSerializer(serializers.Serializer):
+    starts_on = serializers.DateField()
+    ends_on = serializers.DateField()
+    unseen = serializers.IntegerField(min_value=0)
+    learning = serializers.IntegerField(min_value=0)
+    reviewing = serializers.IntegerField(min_value=0)
+    mastered = serializers.IntegerField(min_value=0)
+
+
+class LearningInsightsSerializer(serializers.Serializer):
+    as_of_date = serializers.DateField()
+    timezone = serializers.CharField()
+    review_recall = ReviewRecallSerializer()
+    consistency = StudyConsistencySerializer()
+    learning_curve = WeeklyLearningCurvePointSerializer(
+        many=True,
+        min_length=12,
+        max_length=12,
+    )
 
 
 class ProgressErrorSerializer(serializers.Serializer):

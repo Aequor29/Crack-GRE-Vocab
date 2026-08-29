@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { LearningInsightsDashboard } from "@/components/progress/learning-insights-dashboard";
 import { LearningProgressDashboard } from "@/components/progress/learning-progress-dashboard";
 
 export function DashboardShell() {
@@ -69,6 +70,7 @@ export function DashboardShell() {
       </div>
 
       <LearningProgressDashboard onAuthenticationExpired={auth.refresh} />
+      <LearningInsightsDashboard onAuthenticationExpired={auth.refresh} />
     </section>
   );
 }

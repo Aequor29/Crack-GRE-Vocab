@@ -592,6 +592,84 @@
                 }
             }
         },
+        "/api/progress/insights/": {
+            "get": {
+                "operationId": "progress_insights_retrieve",
+                "description": "Build insights using the learner's requested IANA timezone.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "timezone",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "progress"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LearningInsights"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProgressError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProgressError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProgressError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProgressError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/progress/summary/": {
             "get": {
                 "operationId": "progress_summary_retrieve",
@@ -1081,14 +1159,19 @@
                         "type": "integer",
                         "minimum": 0
                     },
-                    "review": {
+                    "reviewing": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "mastered": {
                         "type": "integer",
                         "minimum": 0
                     }
                 },
                 "required": [
                     "learning",
-                    "review",
+                    "mastered",
+                    "reviewing",
                     "total",
                     "unseen",
                     "version"
@@ -1172,6 +1255,37 @@
                     "display_name",
                     "email",
                     "id"
+                ]
+            },
+            "LearningInsights": {
+                "type": "object",
+                "properties": {
+                    "as_of_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "timezone": {
+                        "type": "string"
+                    },
+                    "review_recall": {
+                        "$ref": "#/components/schemas/ReviewRecall"
+                    },
+                    "consistency": {
+                        "$ref": "#/components/schemas/StudyConsistency"
+                    },
+                    "learning_curve": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WeeklyLearningCurvePoint"
+                        }
+                    }
+                },
+                "required": [
+                    "as_of_date",
+                    "consistency",
+                    "learning_curve",
+                    "review_recall",
+                    "timezone"
                 ]
             },
             "LearningProgressSummary": {
@@ -1388,6 +1502,64 @@
                     "rating"
                 ]
             },
+            "ReviewRecall": {
+                "type": "object",
+                "properties": {
+                    "current": {
+                        "$ref": "#/components/schemas/ReviewRecallPeriod"
+                    },
+                    "previous": {
+                        "$ref": "#/components/schemas/ReviewRecallPeriod"
+                    },
+                    "change_percentage_points": {
+                        "type": "integer",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "change_percentage_points",
+                    "current",
+                    "previous"
+                ]
+            },
+            "ReviewRecallPeriod": {
+                "type": "object",
+                "properties": {
+                    "starts_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "ends_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "remembered": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "answers": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "rate_percent": {
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 0,
+                        "nullable": true
+                    },
+                    "has_sufficient_data": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "answers",
+                    "ends_on",
+                    "has_sufficient_data",
+                    "rate_percent",
+                    "remembered",
+                    "starts_on"
+                ]
+            },
             "ServiceIndex": {
                 "type": "object",
                 "description": "Describe the database-independent service document.",
@@ -1469,6 +1641,57 @@
                     "outcome",
                     "replayed",
                     "session"
+                ]
+            },
+            "StudyConsistency": {
+                "type": "object",
+                "properties": {
+                    "calendar_starts_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "calendar_ends_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "current_streak_days": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "study_days": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StudyDay"
+                        }
+                    }
+                },
+                "required": [
+                    "calendar_ends_on",
+                    "calendar_starts_on",
+                    "current_streak_days",
+                    "study_days"
+                ]
+            },
+            "StudyDay": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "answers": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "words_practiced": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "answers",
+                    "date",
+                    "words_practiced"
                 ]
             },
             "StudyPlanningError": {
@@ -1731,6 +1954,43 @@
                     "sessions_completed",
                     "sessions_started",
                     "timezone"
+                ]
+            },
+            "WeeklyLearningCurvePoint": {
+                "type": "object",
+                "properties": {
+                    "starts_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "ends_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "unseen": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "learning": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "reviewing": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "mastered": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "ends_on",
+                    "learning",
+                    "mastered",
+                    "reviewing",
+                    "starts_on",
+                    "unseen"
                 ]
             }
         },
