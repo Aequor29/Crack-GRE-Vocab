@@ -29,7 +29,7 @@ _Avoid_: Answer result, review result
 ## Progress
 
 **Learning Progress**:
-A refresh-safe read model of one learner's current corpus coverage, actionable review load, today's activity, and recent Recall Outcomes.
+A refresh-safe read model of one learner's current corpus coverage, actionable review load, and today's activity.
 _Avoid_: Study state, analytics
 
 **Unseen Word**:

@@ -2,14 +2,12 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from uuid import UUID
 
 from accounts.models import LearnerAccount
 from django.db.models import Count, Q
 from study.models import (
     LearnerWordState,
     RecallAnswer,
-    RecallOutcome,
     SchedulingPhase,
     StudySession,
 )
@@ -37,18 +35,6 @@ class TodayActivityCounts:
     answers: int
     remembered: int
     forgot: int
-
-
-@dataclass(frozen=True)
-class RecentRecallOutcome:
-    """One recent learner-visible scheduling result."""
-
-    word_id: UUID
-    term: str
-    rating: str
-    phase: str
-    next_due_at: datetime
-    occurred_at: datetime
 
 
 def get_active_corpus() -> CorpusVersion | None:
@@ -137,28 +123,4 @@ def count_today_activity(
         answers=answers["answers"] or 0,
         remembered=answers["remembered"] or 0,
         forgot=answers["forgot"] or 0,
-    )
-
-
-def list_recent_recall_outcomes(
-    *,
-    learner: LearnerAccount,
-    limit: int,
-) -> tuple[RecentRecallOutcome, ...]:
-    """Return a bounded newest-first Recall Outcome summary for one learner."""
-    outcomes = (
-        RecallOutcome.objects.filter(answer__item__session__learner=learner)
-        .select_related("answer__item__corpus_entry")
-        .order_by("-occurred_at", "-id")[:limit]
-    )
-    return tuple(
-        RecentRecallOutcome(
-            word_id=outcome.answer.item.corpus_entry.word_id,
-            term=outcome.answer.item.corpus_entry.term,
-            rating=outcome.answer.rating,
-            phase=outcome.next_phase,
-            next_due_at=outcome.next_due_at,
-            occurred_at=outcome.occurred_at,
-        )
-        for outcome in outcomes
     )

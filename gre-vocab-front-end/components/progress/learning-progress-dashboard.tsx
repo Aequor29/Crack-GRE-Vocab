@@ -25,13 +25,6 @@ function formatNumber(value: number): string {
   return numberFormatter.format(value);
 }
 
-function formatNextReview(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function ProgressLoading() {
   return (
     <div
@@ -124,54 +117,31 @@ function StudyAction({ summary }: { summary: LearningProgressSummary }) {
 
 function TodayActivity({ summary }: { summary: LearningProgressSummary }) {
   return (
-    <article className="rounded-[2rem] border border-black/10 bg-surface p-7 sm:p-8 dark:border-white/10">
-      <h2 className="text-2xl font-black tracking-tight">Today</h2>
-      <p className="mt-5 text-4xl font-black tracking-tight">
-        {formatNumber(summary.today.answers)} answers
-      </p>
-      <dl className="mt-6 grid grid-cols-2 gap-4">
-        <div className="rounded-2xl bg-background p-4">
-          <dt className="text-sm text-foreground/60">Remembered</dt>
-          <dd className="mt-1 text-2xl font-black">{formatNumber(summary.today.remembered)}</dd>
+    <article className="rounded-[2rem] border border-black/10 bg-surface p-7 sm:p-8 dark:border-white/10 lg:col-span-3">
+      <div className="grid gap-6 sm:grid-cols-[minmax(12rem,1fr)_2fr] sm:items-end">
+        <div>
+          <h2 className="text-2xl font-black tracking-tight">Today</h2>
+          <p className="mt-4 text-4xl font-black tracking-tight">
+            {formatNumber(summary.today.answers)} answers
+          </p>
         </div>
-        <div className="rounded-2xl bg-background p-4">
-          <dt className="text-sm text-foreground/60">Forgot</dt>
-          <dd className="mt-1 text-2xl font-black">{formatNumber(summary.today.forgot)}</dd>
-        </div>
-      </dl>
-      <p className="mt-5 text-sm text-foreground/60">
-        {formatNumber(summary.today.sessions_completed)} sessions completed
-      </p>
-    </article>
-  );
-}
-
-function RecentRecall({ summary }: { summary: LearningProgressSummary }) {
-  return (
-    <article className="rounded-[2rem] border border-black/10 bg-surface p-7 sm:p-8 dark:border-white/10 lg:col-span-2">
-      <h2 className="text-2xl font-black tracking-tight">Recent recall</h2>
-      {summary.recent_outcomes.length === 0 ? (
-        <p className="mt-5 text-foreground/60">No recall history yet.</p>
-      ) : (
-        <ul className="mt-5 divide-y divide-black/10 dark:divide-white/10">
-          {summary.recent_outcomes.map((outcome) => (
-            <li
-              className="flex flex-wrap items-center justify-between gap-3 py-4"
-              key={`${outcome.word_id}-${outcome.occurred_at}`}
-            >
-              <div>
-                <p className="text-lg font-black">{outcome.term}</p>
-                <p className="mt-1 text-sm text-foreground/55">
-                  Next review {formatNextReview(outcome.next_due_at)}
-                </p>
-              </div>
-              <span className="rounded-full bg-background px-3 py-1 text-sm font-bold capitalize">
-                {outcome.rating}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+        <dl className="grid grid-cols-3 gap-3">
+          <div className="rounded-2xl bg-background p-4">
+            <dt className="text-sm text-foreground/60">Remembered</dt>
+            <dd className="mt-1 text-2xl font-black">{formatNumber(summary.today.remembered)}</dd>
+          </div>
+          <div className="rounded-2xl bg-background p-4">
+            <dt className="text-sm text-foreground/60">Forgot</dt>
+            <dd className="mt-1 text-2xl font-black">{formatNumber(summary.today.forgot)}</dd>
+          </div>
+          <div className="rounded-2xl bg-background p-4">
+            <dt className="text-sm text-foreground/60">Sessions</dt>
+            <dd className="mt-1 text-2xl font-black">
+              {formatNumber(summary.today.sessions_completed)}
+            </dd>
+          </div>
+        </dl>
+      </div>
     </article>
   );
 }
@@ -182,7 +152,6 @@ function LoadedProgress({ summary }: { summary: LearningProgressSummary }) {
       <Coverage summary={summary} />
       <StudyAction summary={summary} />
       <TodayActivity summary={summary} />
-      <RecentRecall summary={summary} />
     </div>
   );
 }

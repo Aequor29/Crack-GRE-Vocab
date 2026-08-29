@@ -1,8 +1,4 @@
-import type {
-  LearningProgressSummary,
-  ProgressError,
-  RecentRecallOutcome,
-} from "@/lib/api/generated/schema.generated";
+import type { LearningProgressSummary, ProgressError } from "@/lib/api/generated/schema.generated";
 import { type ApiRequestOptions, ApiTransportError, getApiJson } from "@/lib/api/transport";
 
 type OpenApiDocument = typeof import("../../../crackGreVocab/openapi.json");
@@ -40,23 +36,6 @@ function isNonnegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
-function isRecentRecallOutcome(value: unknown): value is RecentRecallOutcome {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const outcome = value as Partial<RecentRecallOutcome>;
-  return (
-    typeof outcome.word_id === "string" &&
-    typeof outcome.term === "string" &&
-    (outcome.rating === "remembered" || outcome.rating === "forgot") &&
-    (outcome.phase === "learning" ||
-      outcome.phase === "review" ||
-      outcome.phase === "relearning") &&
-    typeof outcome.next_due_at === "string" &&
-    typeof outcome.occurred_at === "string"
-  );
-}
-
 function isLearningProgressSummary(value: unknown): value is LearningProgressSummary {
   if (!value || typeof value !== "object") {
     return false;
@@ -91,14 +70,7 @@ function isLearningProgressSummary(value: unknown): value is LearningProgressSum
     isNonnegativeInteger(today.remembered) &&
     isNonnegativeInteger(today.forgot) &&
     today.remembered + today.forgot === today.answers;
-  return (
-    validCorpus &&
-    validActionable &&
-    validToday &&
-    Array.isArray(summary.recent_outcomes) &&
-    summary.recent_outcomes.length <= 5 &&
-    summary.recent_outcomes.every(isRecentRecallOutcome)
-  );
+  return validCorpus && validActionable && validToday;
 }
 
 function readErrorPayload(payload: unknown): Partial<ProgressError> {

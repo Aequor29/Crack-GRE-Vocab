@@ -9,8 +9,8 @@ The current foundation includes a supported Django/PostgreSQL backend, a clean
 Next.js application shell, a generated typed API boundary, Learner Accounts,
 backend-planned study sessions, answer recovery, and a dashboard shell. Progress
 reporting now gives each learner current corpus coverage, due work, today's
-activity, and recent recall outcomes. Hosted infrastructure and deployment
-automation remain separately scoped work.
+activity, and an obvious next-study action. Hosted infrastructure and
+deployment automation remain separately scoped work.
 
 ## Repository layout
 

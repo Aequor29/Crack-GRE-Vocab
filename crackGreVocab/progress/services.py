@@ -12,10 +12,7 @@ from .selectors import (
     count_today_activity,
     get_active_corpus,
     learner_has_active_session,
-    list_recent_recall_outcomes,
 )
-
-RECENT_OUTCOME_LIMIT = 5
 
 
 class ProgressUnavailable(Exception):
@@ -95,11 +92,4 @@ def build_learning_progress_summary(
             "timezone": timezone_name,
             **asdict(today_counts),
         },
-        "recent_outcomes": [
-            asdict(outcome)
-            for outcome in list_recent_recall_outcomes(
-                learner=learner,
-                limit=RECENT_OUTCOME_LIMIT,
-            )
-        ],
     }

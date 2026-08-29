@@ -30,13 +30,6 @@ export type ReadinessStatusEnum = "ready" | "unavailable";
 export type RatingEnum = "remembered" | "forgot";
 
 /**
- * * `learning` - Learning
- * * `review` - Review
- * * `relearning` - Relearning
- */
-export type PhaseEnum = "learning" | "review" | "relearning";
-
-/**
  * * `due` - Due review
  * * `new` - New Word
  */
@@ -118,7 +111,6 @@ export interface LearningProgressSummary {
   corpus: CorpusProgress;
   actionable: ActionableProgress;
   today: TodayProgress;
-  recent_outcomes: RecentRecallOutcome[];
 }
 
 /** Validate the opaque identity, token, and replacement password shape. */
@@ -199,27 +191,6 @@ export interface RecallOutcome {
   next_phase: string;
   /** @format date-time */
   previous_due_at?: string | null;
-  /** @format date-time */
-  next_due_at: string;
-  /** @format date-time */
-  occurred_at: string;
-}
-
-export interface RecentRecallOutcome {
-  /** @format uuid */
-  word_id: string;
-  term: string;
-  /**
-   * * `remembered` - Remembered
-   * * `forgot` - Forgot
-   */
-  rating: RatingEnum;
-  /**
-   * * `learning` - Learning
-   * * `review` - Review
-   * * `relearning` - Relearning
-   */
-  phase: PhaseEnum;
   /** @format date-time */
   next_due_at: string;
   /** @format date-time */
