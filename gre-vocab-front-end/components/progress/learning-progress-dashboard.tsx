@@ -100,21 +100,28 @@ function StudyAction({ summary }: { summary: LearningProgressSummary }) {
     : "Start studying";
   return (
     <Card
-      className="flex flex-col rounded-[2rem] bg-accent-soft p-7 text-foreground sm:p-9"
+      className="relative flex overflow-hidden rounded-[2rem] bg-accent-soft p-7 text-foreground sm:p-9"
       variant="transparent"
     >
-      <p className="text-sm font-bold uppercase tracking-[0.18em] opacity-60">Next up</p>
-      <p className="mt-4 text-5xl font-black tracking-[-0.05em]">
-        {formatNumber(summary.actionable.due_now)}
-      </p>
-      <p className="mt-1 text-lg font-bold">due now</p>
-      <p className="mt-3 opacity-65">{formatNumber(summary.actionable.due_today)} due today</p>
-      <Link
-        className={`${buttonVariants({ variant: "primary" })} mt-8 w-full justify-center`}
-        href="/study"
-      >
-        {actionLabel}
-      </Link>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-accent/20 blur-3xl"
+      />
+      <div className="relative flex h-full flex-col">
+        <p className="text-sm font-bold uppercase tracking-[0.18em] opacity-60">Next up</p>
+        <p className="mt-4 text-6xl font-black tracking-[-0.06em] sm:text-7xl">
+          {formatNumber(summary.actionable.due_now)}
+        </p>
+        <p className="mt-1 text-lg font-bold">due now</p>
+        <p className="mt-3 opacity-65">{formatNumber(summary.actionable.due_today)} due today</p>
+        <Link
+          className={`${buttonVariants({ variant: "primary" })} mt-8 w-full justify-center sm:mt-auto`}
+          href="/study"
+        >
+          {actionLabel}
+          <span aria-hidden="true">→</span>
+        </Link>
+      </div>
     </Card>
   );
 }
