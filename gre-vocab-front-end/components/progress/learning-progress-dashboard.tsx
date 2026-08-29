@@ -100,8 +100,8 @@ function StudyAction({ summary }: { summary: LearningProgressSummary }) {
     : "Start studying";
   return (
     <Card
-      className="flex flex-col rounded-[2rem] bg-foreground p-7 text-background sm:p-9"
-      variant="transparent"
+      className="flex flex-col rounded-[2rem] border border-accent/25 p-7 sm:p-9"
+      variant="tertiary"
     >
       <p className="text-sm font-bold uppercase tracking-[0.18em] opacity-60">Next up</p>
       <p className="mt-4 text-5xl font-black tracking-[-0.05em]">
