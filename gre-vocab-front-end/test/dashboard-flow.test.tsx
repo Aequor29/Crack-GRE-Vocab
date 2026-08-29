@@ -29,7 +29,6 @@ describe("dashboard shell", () => {
     render(<DashboardShell />);
 
     expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
-    expect(screen.getByText(/Welcome back,/)).toHaveTextContent("Welcome back, Ada.");
     expect(screen.getByRole("link", { name: "Start studying" })).toHaveAttribute("href", "/study");
     expect(screen.getByRole("link", { name: "Manage account" })).toHaveAttribute(
       "href",

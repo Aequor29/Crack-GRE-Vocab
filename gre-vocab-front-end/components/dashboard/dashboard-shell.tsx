@@ -54,13 +54,7 @@ export function DashboardShell() {
     <section aria-labelledby="dashboard-title" className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <p className="text-base font-medium text-foreground/60">
-            Welcome back, <span className="text-foreground/85">{auth.account.display_name}</span>.
-          </p>
-          <h1
-            className="mt-1 text-4xl font-black tracking-[-0.04em] sm:text-5xl"
-            id="dashboard-title"
-          >
+          <h1 className="text-4xl font-black tracking-[-0.04em] sm:text-5xl" id="dashboard-title">
             Dashboard
           </h1>
         </div>
