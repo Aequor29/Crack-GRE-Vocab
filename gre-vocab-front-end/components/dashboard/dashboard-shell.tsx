@@ -54,8 +54,8 @@ export function DashboardShell() {
     <section aria-labelledby="dashboard-title" className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <p className="text-lg font-medium text-foreground/65">
-            Welcome back, <span className="font-bold text-accent">{auth.account.display_name}</span>
+          <p className="text-base font-medium text-foreground/60">
+            Welcome back, <span className="text-foreground/85">{auth.account.display_name}</span>.
           </p>
           <h1
             className="mt-1 text-4xl font-black tracking-[-0.04em] sm:text-5xl"
