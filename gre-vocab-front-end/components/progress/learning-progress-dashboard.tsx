@@ -100,9 +100,10 @@ function StudyAction({ summary }: { summary: LearningProgressSummary }) {
     : "Start studying";
   return (
     <Card
-      className="relative flex overflow-hidden rounded-[2rem] bg-accent-soft p-7 text-foreground sm:p-9"
+      className="relative flex overflow-hidden rounded-[2rem] bg-background p-7 text-foreground sm:p-9"
       variant="transparent"
     >
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-accent-soft" />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-accent/20 blur-3xl"
