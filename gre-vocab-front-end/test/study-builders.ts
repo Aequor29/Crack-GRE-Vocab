@@ -30,32 +30,36 @@ export function buildStudySession(overrides: Partial<StudySession> = {}): StudyS
     ? (overrides.current_item ?? null)
     : buildStudyItem();
   return {
-    answered_count: 0,
+    cleared_word_count: 0,
     corpus_version: "m1-v1",
     created_at: "2026-08-07T05:00:00Z",
     current_item: currentItem,
+    day_ends_at: "2026-08-08T05:00:00Z",
     id: "00000000-0000-4000-8000-000000000003",
-    item_count: currentItem ? 1 : 0,
-    items: currentItem ? [currentItem] : [],
     new_word_target: 1,
+    next_ready_at: null,
     planned_new_word_count: currentItem?.kind === "new" ? 1 : 0,
-    planner_version: "m1-due-first-v1",
-    remaining_count: currentItem ? 1 : 0,
+    planner_version: "m1-daily-queue-v1",
+    queue_state: currentItem ? "ready" : "waiting",
+    remaining_word_count: currentItem ? 1 : 0,
     status: "active",
+    timezone: "America/Chicago",
+    word_count: currentItem ? 1 : 0,
     ...overrides,
   };
 }
 
 export function buildCompletedStudySession(overrides: Partial<StudySession> = {}): StudySession {
-  const items = overrides.items ?? [buildStudyItem()];
+  const wordCount = overrides.word_count ?? 1;
   return buildStudySession({
-    answered_count: 1,
+    cleared_word_count: wordCount,
     current_item: null,
     ended_at: "2026-08-07T05:01:00Z",
-    item_count: 1,
-    items,
-    remaining_count: 0,
+    next_ready_at: null,
+    queue_state: "completed",
+    remaining_word_count: 0,
     status: "completed",
+    word_count: wordCount,
     ...overrides,
   });
 }

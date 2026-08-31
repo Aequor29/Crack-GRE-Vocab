@@ -5,6 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from accounts.models import LearnerAccount
+from django.db.models import Case, IntegerField, Max, When
 from vocabulary.models import CorpusEntry, CorpusVersion
 
 from .models import (
@@ -14,6 +15,7 @@ from .models import (
     SchedulingPhase,
     StudySession,
     StudySessionItem,
+    StudySessionWord,
 )
 from .scheduling import SchedulerTransition
 from .selectors import DueItem
@@ -51,18 +53,26 @@ def lock_session_item(
     )
 
 
-def lock_current_session_item(
-    *,
-    session: StudySession,
-) -> StudySessionItem | None:
-    """Lock and return the next unanswered item in the planned order."""
+def lock_current_session_item(*, session: StudySession) -> StudySessionItem | None:
+    """Lock and return the presentation attempt issued for this session."""
+    if session.current_item_id is None:
+        return None
     return (
         StudySessionItem.objects.select_for_update(of=("self",))
         .select_related("corpus_entry__word")
-        .filter(session=session, answer__isnull=True)
-        .order_by("position")
+        .filter(pk=session.current_item_id, session=session, answer__isnull=True)
         .first()
     )
+
+
+def persist_current_session_item(
+    *,
+    session: StudySession,
+    item: StudySessionItem | None,
+) -> None:
+    """Persist the single card currently issued to the learner."""
+    session.current_item = item
+    session.save(update_fields=("current_item", "updated_at"))
 
 
 def lock_word_state(
@@ -78,41 +88,162 @@ def lock_word_state(
     )
 
 
-def _session_items(
+def _session_words(
     *,
     session: StudySession,
     due_items: Sequence[DueItem],
     new_entries: Sequence[CorpusEntry],
-) -> list[StudySessionItem]:
-    items = [
-        StudySessionItem(
+    planned_at: datetime,
+) -> list[StudySessionWord]:
+    words = [
+        StudySessionWord(
             session=session,
             corpus_entry=entry,
+            position=position,
+            kind=StudySessionWord.Kind.DUE,
+            ready_at=(
+                planned_at
+                if state.phase == SchedulingPhase.REVIEW
+                or state.next_due_at <= planned_at
+                else state.next_due_at
+            ),
+        )
+        for position, (state, entry) in enumerate(due_items, start=1)
+    ]
+    words.extend(
+        StudySessionWord(
+            session=session,
+            corpus_entry=entry,
+            position=position,
+            kind=StudySessionWord.Kind.NEW,
+            ready_at=planned_at,
+        )
+        for position, entry in enumerate(new_entries, start=len(words) + 1)
+    )
+    return words
+
+
+def _initial_attempt_for_session_word(
+    *,
+    session: StudySession,
+    session_word: StudySessionWord,
+    position: int,
+    state: LearnerWordState | None,
+) -> StudySessionItem:
+    """Build the first presentation attempt for an activated session Word."""
+    if session_word.kind == StudySessionWord.Kind.DUE:
+        if state is None:
+            raise ValueError("A due session Word must have scheduling state.")
+        return StudySessionItem(
+            session=session,
+            session_word=session_word,
+            corpus_entry=session_word.corpus_entry,
             position=position,
             kind=StudySessionItem.Kind.DUE,
             due_at_snapshot=state.next_due_at,
             scheduler_version=state.scheduler_version,
             scheduling_state_snapshot=state.scheduler_state,
+            ready_at=session_word.ready_at,
         )
-        for position, (state, entry) in enumerate(due_items, start=1)
-    ]
-    items.extend(
-        StudySessionItem(
-            session=session,
-            corpus_entry=entry,
-            position=position,
-            kind=StudySessionItem.Kind.NEW,
-        )
-        for position, entry in enumerate(new_entries, start=len(items) + 1)
+    return StudySessionItem(
+        session=session,
+        session_word=session_word,
+        corpus_entry=session_word.corpus_entry,
+        position=position,
+        kind=StudySessionItem.Kind.NEW,
+        ready_at=session_word.ready_at,
     )
-    return items
+
+
+def refill_study_session_window(
+    *,
+    session: StudySession,
+    observed_at: datetime,
+    max_active_words: int,
+) -> None:
+    """Fill vacant working slots without changing the fixed daily Word set."""
+    active_count = session.session_words.filter(
+        is_in_active_window=True,
+        cleared_at__isnull=True,
+    ).count()
+    capacity = max_active_words - active_count
+    if capacity <= 0:
+        return
+
+    candidates = list(
+        session.session_words.filter(
+            is_in_active_window=False,
+            cleared_at__isnull=True,
+        )
+        .select_related("corpus_entry__word")
+        .annotate(
+            ready_priority=Case(
+                When(ready_at__lte=observed_at, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("ready_priority", "ready_at", "position")[:capacity]
+    )
+    if not candidates:
+        return
+
+    candidate_ids = [candidate.pk for candidate in candidates]
+    attempted_word_ids = set(
+        StudySessionItem.objects.filter(
+            session_word_id__in=candidate_ids,
+        ).values_list("session_word_id", flat=True)
+    )
+    unstarted = [
+        candidate for candidate in candidates if candidate.pk not in attempted_word_ids
+    ]
+    due_word_ids = [
+        candidate.corpus_entry.word_id
+        for candidate in unstarted
+        if candidate.kind == StudySessionWord.Kind.DUE
+    ]
+    states_by_word_id = {
+        state.word_id: state
+        for state in LearnerWordState.objects.filter(
+            learner=session.learner,
+            word_id__in=due_word_ids,
+        )
+    }
+    next_position = (
+        StudySessionItem.objects.filter(session=session).aggregate(
+            last=Max("position")
+        )["last"]
+        or 0
+    )
+    attempts = []
+    for offset, session_word in enumerate(unstarted, start=1):
+        attempts.append(
+            _initial_attempt_for_session_word(
+                session=session,
+                session_word=session_word,
+                position=next_position + offset,
+                state=states_by_word_id.get(session_word.corpus_entry.word_id),
+            )
+        )
+    if attempts:
+        StudySessionItem.objects.bulk_create(attempts)
+
+    StudySessionWord.objects.filter(pk__in=candidate_ids).update(
+        is_in_active_window=True
+    )
+    for candidate in candidates:
+        candidate.is_in_active_window = True
 
 
 def persist_study_session_plan(
     *,
     learner: LearnerAccount,
     corpus: CorpusVersion,
+    timezone_name: str,
+    day_ends_at: datetime,
+    planned_at: datetime,
     new_word_target: int,
+    max_active_words: int,
     due_items: Sequence[DueItem],
     new_entries: Sequence[CorpusEntry],
     planner_version: str,
@@ -125,17 +256,68 @@ def persist_study_session_plan(
         learner=learner,
         corpus=corpus,
         status=StudySession.Status.ACTIVE,
+        timezone_name=timezone_name,
+        day_ends_at=day_ends_at,
         new_word_target=new_word_target,
         planner_version=planner_version,
     )
-    StudySessionItem.objects.bulk_create(
-        _session_items(
+    StudySessionWord.objects.bulk_create(
+        _session_words(
             session=session,
             due_items=due_items,
             new_entries=new_entries,
+            planned_at=planned_at,
         )
     )
+    refill_study_session_window(
+        session=session,
+        observed_at=planned_at,
+        max_active_words=max_active_words,
+    )
     return session
+
+
+def persist_session_word_after_answer(
+    *,
+    session: StudySession,
+    item: StudySessionItem,
+    occurred_at: datetime,
+    transition: SchedulerTransition,
+) -> None:
+    """Update daily progress and enqueue a later attempt when still due today."""
+    session_word = item.session_word
+    session_word.last_presented_position = item.position
+    session_word.ready_at = transition.next_due_at
+    session_word.is_in_active_window = False
+    update_fields = [
+        "last_presented_position",
+        "ready_at",
+        "is_in_active_window",
+    ]
+    if transition.next_due_at >= session.day_ends_at:
+        session_word.cleared_at = occurred_at
+        update_fields.append("cleared_at")
+    session_word.save(update_fields=update_fields)
+
+    if session_word.cleared_at is not None:
+        return
+    last_position = (
+        StudySessionItem.objects.filter(session=session).aggregate(
+            last=Max("position")
+        )["last"]
+        or 0
+    )
+    StudySessionItem.objects.create(
+        session=session,
+        session_word=session_word,
+        corpus_entry=item.corpus_entry,
+        position=last_position + 1,
+        kind=StudySessionItem.Kind.DUE,
+        due_at_snapshot=transition.next_due_at,
+        scheduler_version=transition.scheduler_version,
+        scheduling_state_snapshot=transition.next_state,
+        ready_at=transition.next_due_at,
+    )
 
 
 def persist_recall_answer_transition(

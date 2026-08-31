@@ -1,12 +1,19 @@
 """Durable learner scheduling, Study Session, and Recall Outcome models."""
 
 import uuid
+from datetime import UTC, datetime, time, timedelta
 
 from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 from vocabulary.models import CorpusEntry, CorpusVersion, VocabularyWord
+
+
+def default_study_day_end() -> datetime:
+    """Return the next UTC midnight for low-level session creation."""
+    today = timezone.now().astimezone(UTC).date()
+    return datetime.combine(today + timedelta(days=1), time.min, UTC)
 
 
 class SchedulingPhase(models.TextChoices):
@@ -101,11 +108,20 @@ class StudySession(models.Model):
         related_name="study_sessions",
     )
     status = models.CharField(max_length=16, choices=Status.choices)
+    timezone_name = models.CharField(default="UTC", max_length=64)
+    day_ends_at = models.DateTimeField(default=default_study_day_end)
     new_word_target = models.PositiveSmallIntegerField()
     planner_version = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     ended_at = models.DateTimeField(null=True, blank=True)
+    current_item = models.OneToOneField(
+        "StudySessionItem",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="current_for_session",
+    )
 
     class Meta:
         ordering = ("-created_at",)
@@ -149,8 +165,65 @@ class StudySession(models.Model):
         self.ended_at = at or timezone.now()
 
 
+class StudySessionWord(models.Model):
+    """One unique Word assigned to a learner's daily Study Session."""
+
+    class Kind(models.TextChoices):
+        DUE = "due", "Due review"
+        NEW = "new", "New Word"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(
+        StudySession,
+        on_delete=models.CASCADE,
+        related_name="session_words",
+    )
+    corpus_entry = models.ForeignKey(
+        CorpusEntry,
+        on_delete=models.PROTECT,
+        related_name="study_session_words",
+    )
+    position = models.PositiveIntegerField()
+    kind = models.CharField(max_length=8, choices=Kind.choices)
+    ready_at = models.DateTimeField()
+    is_in_active_window = models.BooleanField(default=False)
+    last_presented_position = models.PositiveIntegerField(null=True, blank=True)
+    cleared_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("position",)
+        constraints = (
+            models.UniqueConstraint(
+                fields=("session", "corpus_entry"),
+                name="study_unique_session_word",
+            ),
+            models.UniqueConstraint(
+                fields=("session", "position"),
+                name="study_unique_session_word_position",
+            ),
+            models.CheckConstraint(
+                condition=Q(position__gte=1),
+                name="study_session_word_position_positive",
+            ),
+        )
+        indexes = (
+            models.Index(
+                fields=("session", "cleared_at", "ready_at"),
+                name="study_session_word_ready_idx",
+            ),
+            models.Index(
+                fields=("session", "is_in_active_window", "ready_at"),
+                name="study_session_word_window_idx",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.session_id} Word {self.position}: {self.corpus_entry.term}"
+
+
 class StudySessionItem(models.Model):
-    """One server-ordered question selected for a Study Session."""
+    """One durable presentation attempt for a Study Session Word."""
 
     class Kind(models.TextChoices):
         DUE = "due", "Due review"
@@ -162,16 +235,22 @@ class StudySessionItem(models.Model):
         on_delete=models.CASCADE,
         related_name="items",
     )
+    session_word = models.ForeignKey(
+        StudySessionWord,
+        on_delete=models.CASCADE,
+        related_name="attempts",
+    )
     corpus_entry = models.ForeignKey(
         CorpusEntry,
         on_delete=models.PROTECT,
         related_name="study_items",
     )
-    position = models.PositiveSmallIntegerField()
+    position = models.PositiveIntegerField()
     kind = models.CharField(max_length=8, choices=Kind.choices)
     due_at_snapshot = models.DateTimeField(null=True, blank=True)
     scheduler_version = models.CharField(max_length=64, blank=True)
     scheduling_state_snapshot = models.JSONField(default=dict)
+    ready_at = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -180,10 +259,6 @@ class StudySessionItem(models.Model):
             models.UniqueConstraint(
                 fields=("session", "position"),
                 name="study_unique_session_item_position",
-            ),
-            models.UniqueConstraint(
-                fields=("session", "corpus_entry"),
-                name="study_unique_session_corpus_entry",
             ),
             models.CheckConstraint(
                 condition=Q(position__gte=1),
@@ -201,6 +276,12 @@ class StudySessionItem(models.Model):
                     & Q(scheduler_version="")
                 ),
                 name="study_session_item_kind_snapshot_valid",
+            ),
+        )
+        indexes = (
+            models.Index(
+                fields=("session", "ready_at", "position"),
+                name="study_session_item_ready_idx",
             ),
         )
 

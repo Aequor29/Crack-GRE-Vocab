@@ -1,7 +1,7 @@
 """AEQ-15 transactional Recall Answer and Outcome coverage."""
 
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -19,6 +19,7 @@ from study.services import (
     StudyAnswerNotFound,
     plan_study_session,
     record_recall_answer,
+    resume_active_study_session,
 )
 
 from .study_helpers import create_corpus, create_learner
@@ -66,26 +67,46 @@ class RecallAnswerServiceTests(TestCase):
         self.assertEqual(RecallAnswer.objects.count(), 1)
         self.assertEqual(RecallOutcome.objects.count(), 1)
 
-    def test_final_answer_completes_and_exact_retry_replays_without_rescheduling(self):
-        session = self.plan(target=1)
+    def test_clearing_answer_completes_and_exact_retry_does_not_reschedule(self):
+        started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
+        session = plan_study_session(
+            learner=self.learner,
+            new_word_target=1,
+            timezone_name="America/Chicago",
+            planned_at=started_at,
+        ).session
         item = session.items.get()
-        request_id = uuid.uuid4()
 
-        created = record_recall_answer(
+        first = record_recall_answer(
             learner=self.learner,
             session_id=session.pk,
             item_id=item.pk,
+            request_id=uuid.uuid4(),
+            rating="remembered",
+            occurred_at=started_at,
+        )
+        next_due_at = first.outcome.next_due_at
+        resumed = resume_active_study_session(
+            learner=self.learner,
+            observed_at=next_due_at,
+        )
+        repeat_item = resumed.current_item
+        request_id = uuid.uuid4()
+        created = record_recall_answer(
+            learner=self.learner,
+            session_id=session.pk,
+            item_id=repeat_item.pk,
             request_id=request_id,
-            rating="forgot",
-            occurred_at=self.now,
+            rating="remembered",
+            occurred_at=next_due_at,
         )
         replayed = record_recall_answer(
             learner=self.learner,
             session_id=session.pk,
-            item_id=item.pk,
+            item_id=repeat_item.pk,
             request_id=request_id,
-            rating="forgot",
-            occurred_at=self.now + timedelta(hours=1),
+            rating="remembered",
+            occurred_at=next_due_at + timedelta(hours=1),
         )
 
         self.assertTrue(created.created)
@@ -93,10 +114,10 @@ class RecallAnswerServiceTests(TestCase):
         self.assertEqual(replayed.answer.pk, created.answer.pk)
         self.assertEqual(replayed.outcome.pk, created.outcome.pk)
         self.assertEqual(replayed.session.status, StudySession.Status.COMPLETED)
-        self.assertEqual(replayed.session.ended_at, self.now)
-        self.assertEqual(RecallAnswer.objects.count(), 1)
-        self.assertEqual(RecallOutcome.objects.count(), 1)
-        self.assertEqual(LearnerWordState.objects.get().review_count, 1)
+        self.assertEqual(replayed.session.ended_at, next_due_at)
+        self.assertEqual(RecallAnswer.objects.count(), 2)
+        self.assertEqual(RecallOutcome.objects.count(), 2)
+        self.assertEqual(LearnerWordState.objects.get().review_count, 2)
 
     def test_reused_key_answered_item_and_future_item_conflict_without_writes(self):
         session = self.plan()
@@ -213,15 +234,14 @@ class RecallAnswerServiceTests(TestCase):
         self.assertEqual(state.phase, "learning")
         self.assertEqual(state.lapse_count, 0)
 
-        learning_session = plan_study_session(
+        learning_session = resume_active_study_session(
             learner=self.learner,
-            new_word_target=0,
-            planned_at=state.next_due_at,
-        ).session
+            observed_at=state.next_due_at,
+        )
         record_recall_answer(
             learner=self.learner,
             session_id=learning_session.pk,
-            item_id=learning_session.items.get().pk,
+            item_id=learning_session.current_item_id,
             request_id=uuid.uuid4(),
             rating="forgot",
             occurred_at=state.next_due_at,

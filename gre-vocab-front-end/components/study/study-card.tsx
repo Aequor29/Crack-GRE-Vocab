@@ -1,8 +1,8 @@
 import { Button } from "@heroui/react/button";
 import { Card } from "@heroui/react/card";
-import { ProgressBar } from "@heroui/react/progress-bar";
 import type { RefObject } from "react";
 
+import { StudyProgress } from "@/components/study/study-progress";
 import type { StudyNotice } from "@/components/study/types";
 import type { StudySession } from "@/lib/api/generated/schema.generated";
 import type { RecallRating } from "@/lib/api/study";
@@ -38,23 +38,11 @@ export function StudyCard({
 
   return (
     <div aria-busy={submitting} className="space-y-7">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-bold text-foreground/60">
-        <p>
-          Card {session.answered_count + 1} of {session.item_count}
-        </p>
+      <div className="flex justify-end text-sm font-bold text-foreground/60">
         <p>{item.kind === "due" ? "Due review" : "New word"}</p>
       </div>
 
-      <ProgressBar
-        aria-label="Study progress"
-        className="w-full"
-        maxValue={session.item_count}
-        value={session.answered_count}
-      >
-        <ProgressBar.Track>
-          <ProgressBar.Fill />
-        </ProgressBar.Track>
-      </ProgressBar>
+      <StudyProgress clearedWordCount={session.cleared_word_count} wordCount={session.word_count} />
 
       <Card className="rounded-[2rem] bg-background/70 p-7 text-center sm:p-12" variant="secondary">
         <div className={revealed ? undefined : "grid min-h-64 content-center"}>

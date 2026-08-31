@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { StudyCard } from "@/components/study/study-card";
+import { StudyProgress } from "@/components/study/study-progress";
 import { StudySessionPlanner } from "@/components/study/study-session-planner";
 import type { StudyNotice } from "@/components/study/types";
 import type { StudySession as StudySessionContract } from "@/lib/api/generated/schema.generated";
@@ -32,6 +33,20 @@ function studyNoticeFromError(error: unknown): StudyNotice {
     message: "Something unexpected interrupted this study session. Please try again.",
     retryable: true,
   };
+}
+
+function browserTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function formatReadyTime(value: string | null): string {
+  if (!value) {
+    return "soon";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 export function StudySession() {
@@ -196,7 +211,7 @@ export function StudySession() {
     setStarting(true);
     setNotice(null);
     try {
-      const created = await createStudySession(newWordTarget);
+      const created = await createStudySession(newWordTarget, browserTimezone());
       applyServerSession(created);
     } catch (error) {
       setNotice(studyNoticeFromError(error));
@@ -299,7 +314,7 @@ export function StudySession() {
         <div role="status">
           <h2 className="text-4xl font-black tracking-tight">Session complete</h2>
           <p className="mx-auto mt-4 max-w-xl text-foreground/65">
-            You finished all {session.item_count} cards. Come back when your next reviews are ready.
+            All {session.word_count} words are done for today.
           </p>
         </div>
         <Link
@@ -336,6 +351,34 @@ export function StudySession() {
   }
 
   if (!session.current_item) {
+    if (session.queue_state === "waiting") {
+      return (
+        <div className="mx-auto max-w-2xl space-y-7 py-10 text-center">
+          <StudyProgress
+            clearedWordCount={session.cleared_word_count}
+            wordCount={session.word_count}
+          />
+          <div role="status">
+            <h2 className="text-3xl font-black tracking-tight">Next word is not ready yet</h2>
+            <p className="mx-auto mt-4 max-w-xl text-foreground/65">
+              Your next review is ready at {formatReadyTime(session.next_ready_at)}. You can pause
+              here without losing today&apos;s progress.
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button onPress={() => void restoreStudyProgress()} variant="primary">
+              Check for a ready word
+            </Button>
+            <Link
+              className="inline-flex items-center rounded-full border border-foreground/20 px-5 py-2.5 font-semibold transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              href="/dashboard"
+            >
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="space-y-5 py-10 text-center">
         <div role="alert">

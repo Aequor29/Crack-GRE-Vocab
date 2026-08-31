@@ -13,6 +13,7 @@ from study.models import (
     SchedulingPhase,
     StudySession,
     StudySessionItem,
+    StudySessionWord,
 )
 from study.persistence import persist_study_session_plan
 
@@ -41,9 +42,7 @@ class StudyDomainModelTests(TestCase):
         item_fields = {field.name for field in StudySessionItem._meta.get_fields()}
         state_fields = {field.name for field in LearnerWordState._meta.get_fields()}
 
-        self.assertFalse(
-            {"item_count", "planned_new_word_count"} & session_fields
-        )
+        self.assertFalse({"item_count", "planned_new_word_count"} & session_fields)
         self.assertFalse({"presented_at", "revealed_at"} & item_fields)
         self.assertFalse({"difficulty", "stability"} & state_fields)
 
@@ -63,6 +62,13 @@ class StudyDomainModelTests(TestCase):
         )
         item = StudySessionItem.objects.create(
             session=session,
+            session_word=StudySessionWord.objects.create(
+                session=session,
+                corpus_entry=self.entries[0],
+                position=1,
+                kind=StudySessionWord.Kind.DUE,
+                ready_at=state.next_due_at,
+            ),
             corpus_entry=self.entries[0],
             position=1,
             kind=StudySessionItem.Kind.DUE,
@@ -95,21 +101,23 @@ class StudyDomainModelTests(TestCase):
 
     def test_constraints_reject_duplicate_active_session_and_membership(self):
         session = self.create_session()
-        StudySessionItem.objects.create(
+        StudySessionWord.objects.create(
             session=session,
             corpus_entry=self.entries[0],
             position=1,
-            kind=StudySessionItem.Kind.NEW,
+            kind=StudySessionWord.Kind.NEW,
+            ready_at=self.now,
         )
 
         with self.assertRaises(IntegrityError), transaction.atomic():
             self.create_session()
         with self.assertRaises(IntegrityError), transaction.atomic():
-            StudySessionItem.objects.create(
+            StudySessionWord.objects.create(
                 session=session,
                 corpus_entry=self.entries[0],
                 position=2,
-                kind=StudySessionItem.Kind.NEW,
+                kind=StudySessionWord.Kind.NEW,
+                ready_at=self.now,
             )
 
     def test_plan_write_rejects_cross_corpus_membership_before_persisting(self):
@@ -124,7 +132,11 @@ class StudyDomainModelTests(TestCase):
             persist_study_session_plan(
                 learner=self.learner,
                 corpus=self.corpus,
+                timezone_name="UTC",
+                day_ends_at=self.now + timedelta(days=1),
+                planned_at=self.now,
                 new_word_target=1,
+                max_active_words=30,
                 due_items=(),
                 new_entries=(other_entries[0],),
                 planner_version="test-planner-v1",
@@ -136,7 +148,11 @@ class StudyDomainModelTests(TestCase):
             persist_study_session_plan(
                 learner=self.learner,
                 corpus=self.corpus,
+                timezone_name="UTC",
+                day_ends_at=self.now + timedelta(days=1),
+                planned_at=self.now,
                 new_word_target=2,
+                max_active_words=30,
                 due_items=(),
                 new_entries=(self.entries[0], self.entries[0]),
                 planner_version="test-planner-v1",
@@ -158,8 +174,16 @@ class StudyDomainModelTests(TestCase):
             )
 
         session = self.create_session()
+        session_word = StudySessionWord.objects.create(
+            session=session,
+            corpus_entry=self.entries[0],
+            position=1,
+            kind=StudySessionWord.Kind.NEW,
+            ready_at=self.now,
+        )
         item = StudySessionItem.objects.create(
             session=session,
+            session_word=session_word,
             corpus_entry=self.entries[0],
             position=1,
             kind=StudySessionItem.Kind.NEW,

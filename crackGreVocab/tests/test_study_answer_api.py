@@ -2,7 +2,9 @@
 
 import json
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -50,20 +52,45 @@ class RecallAnswerApiTests(TestCase):
             **headers,
         )
 
-    def test_first_acceptance_and_final_exact_replay_return_canonical_state(self):
+    def test_session_completes_only_after_the_word_is_cleared_for_today(self):
+        started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
         session = plan_study_session(
             learner=self.learner,
             new_word_target=1,
+            timezone_name="America/Chicago",
+            planned_at=started_at,
         ).session
         item = session.items.get()
-        payload = {
+        first_payload = {
             "client_request_id": str(uuid.uuid4()),
             "rating": "remembered",
         }
 
-        created = self.post_answer(session, item, payload)
-        replayed = self.post_answer(session, item, payload)
+        with patch("study.services.timezone.now", return_value=started_at):
+            first = self.post_answer(session, item, first_payload)
+        next_due_at = LearnerWordState.objects.get().next_due_at
+        with patch("study.services.timezone.now", return_value=next_due_at):
+            resumed = self.client.get(reverse("study:active-session"))
+            repeat_item_id = resumed.json()["current_item"]["id"]
+            final_payload = {
+                "client_request_id": str(uuid.uuid4()),
+                "rating": "remembered",
+            }
+            created = self.post_answer(
+                session,
+                SimpleNamespace(pk=repeat_item_id),
+                final_payload,
+            )
+            replayed = self.post_answer(
+                session,
+                SimpleNamespace(pk=repeat_item_id),
+                final_payload,
+            )
 
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(first.json()["session"]["status"], "active")
+        self.assertEqual(first.json()["session"]["cleared_word_count"], 0)
+        self.assertEqual(first.json()["session"]["remaining_word_count"], 1)
         self.assertEqual(created.status_code, 201)
         self.assertEqual(replayed.status_code, 200)
         self.assertFalse(created.json()["replayed"])
@@ -73,11 +100,167 @@ class RecallAnswerApiTests(TestCase):
             replayed.json()["answer"]["id"],
         )
         self.assertEqual(created.json()["session"]["status"], "completed")
-        self.assertEqual(created.json()["session"]["answered_count"], 1)
-        self.assertEqual(created.json()["session"]["remaining_count"], 0)
+        self.assertEqual(created.json()["session"]["cleared_word_count"], 1)
+        self.assertEqual(created.json()["session"]["remaining_word_count"], 0)
         self.assertIsNone(created.json()["session"]["current_item"])
-        self.assertEqual(RecallAnswer.objects.count(), 1)
-        self.assertEqual(RecallOutcome.objects.count(), 1)
+        self.assertNotIn("items", created.json()["session"])
+        self.assertEqual(RecallAnswer.objects.count(), 2)
+        self.assertEqual(RecallOutcome.objects.count(), 2)
+
+    def test_new_words_finish_the_first_round_before_waiting_for_repeats(self):
+        started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
+        session = plan_study_session(
+            learner=self.learner,
+            new_word_target=2,
+            timezone_name="America/Chicago",
+            planned_at=started_at,
+        ).session
+        first_item, second_item = session.items.all()
+
+        with patch("study.services.timezone.now", return_value=started_at):
+            first = self.post_answer(
+                session,
+                first_item,
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "remembered",
+                },
+            )
+        with patch(
+            "study.services.timezone.now",
+            return_value=started_at + timedelta(minutes=1),
+        ):
+            second = self.post_answer(
+                session,
+                second_item,
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "remembered",
+                },
+            )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(first.json()["session"]["current_item"]["term"], "lucid")
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(second.json()["session"]["status"], "active")
+        self.assertEqual(second.json()["session"]["queue_state"], "waiting")
+        self.assertIsNone(second.json()["session"]["current_item"])
+        self.assertEqual(second.json()["session"]["word_count"], 2)
+        self.assertEqual(second.json()["session"]["cleared_word_count"], 0)
+        self.assertEqual(second.json()["session"]["remaining_word_count"], 2)
+        self.assertEqual(
+            second.json()["session"]["next_ready_at"],
+            "2026-08-30T15:10:00Z",
+        )
+
+    def test_issued_card_remains_current_when_an_earlier_attempt_becomes_ready(self):
+        started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
+        session = plan_study_session(
+            learner=self.learner,
+            new_word_target=2,
+            timezone_name="America/Chicago",
+            planned_at=started_at,
+        ).session
+        first_item, second_item = session.items.all()
+
+        with patch("study.services.timezone.now", return_value=started_at):
+            self.post_answer(
+                session,
+                first_item,
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "remembered",
+                },
+            )
+        with patch(
+            "study.services.timezone.now",
+            return_value=started_at + timedelta(minutes=1),
+        ):
+            self.post_answer(
+                session,
+                second_item,
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "forgot",
+                },
+            )
+
+        with patch(
+            "study.services.timezone.now",
+            return_value=started_at + timedelta(minutes=2),
+        ):
+            resumed = self.client.get(reverse("study:active-session"))
+        issued_item_id = resumed.json()["current_item"]["id"]
+        self.assertEqual(resumed.json()["current_item"]["term"], "lucid")
+
+        with patch(
+            "study.services.timezone.now",
+            return_value=started_at + timedelta(minutes=10),
+        ):
+            accepted = self.post_answer(
+                session,
+                SimpleNamespace(pk=issued_item_id),
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "remembered",
+                },
+            )
+
+        self.assertEqual(accepted.status_code, 201)
+
+    def test_ready_repeats_use_least_recently_presented_order(self):
+        started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
+        session = plan_study_session(
+            learner=self.learner,
+            new_word_target=2,
+            timezone_name="America/Chicago",
+            planned_at=started_at,
+        ).session
+        first_item, second_item = session.items.all()
+
+        with patch("study.services.timezone.now", return_value=started_at):
+            self.post_answer(
+                session,
+                first_item,
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "remembered",
+                },
+            )
+        with patch(
+            "study.services.timezone.now",
+            return_value=started_at + timedelta(minutes=1),
+        ):
+            self.post_answer(
+                session,
+                second_item,
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "forgot",
+                },
+            )
+        with patch(
+            "study.services.timezone.now",
+            return_value=started_at + timedelta(minutes=2),
+        ):
+            resumed = self.client.get(reverse("study:active-session"))
+            second_repeat_id = resumed.json()["current_item"]["id"]
+            self.post_answer(
+                session,
+                SimpleNamespace(pk=second_repeat_id),
+                {
+                    "client_request_id": str(uuid.uuid4()),
+                    "rating": "forgot",
+                },
+            )
+
+        with patch(
+            "study.services.timezone.now",
+            return_value=started_at + timedelta(minutes=10),
+        ):
+            fair_next = self.client.get(reverse("study:active-session"))
+
+        self.assertEqual(fair_next.json()["current_item"]["term"], "abate")
 
     def test_validation_csrf_order_and_ownership_fail_safely(self):
         session = plan_study_session(

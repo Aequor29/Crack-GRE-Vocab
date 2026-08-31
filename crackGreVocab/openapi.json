@@ -1184,10 +1184,16 @@
                         "type": "integer",
                         "maximum": 20,
                         "minimum": 0
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
                     }
                 },
                 "required": [
-                    "new_word_target"
+                    "new_word_target",
+                    "timezone"
                 ]
             },
             "CsrfToken": {
@@ -1365,6 +1371,16 @@
                     "code",
                     "detail"
                 ]
+            },
+            "QueueStateEnum": {
+                "enum": [
+                    "ready",
+                    "waiting",
+                    "completed",
+                    "abandoned"
+                ],
+                "type": "string",
+                "description": "* `ready` - ready\n* `waiting` - waiting\n* `completed` - completed\n* `abandoned` - abandoned"
             },
             "RatingEnum": {
                 "enum": [
@@ -1752,8 +1768,25 @@
                     "status": {
                         "$ref": "#/components/schemas/StudySessionStatusEnum"
                     },
+                    "queue_state": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/QueueStateEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "corpus_version": {
                         "type": "string",
+                        "readOnly": true
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "day_ends_at": {
+                        "type": "string",
+                        "format": "date-time",
                         "readOnly": true
                     },
                     "new_word_target": {
@@ -1763,12 +1796,12 @@
                     },
                     "planned_new_word_count": {
                         "type": "integer",
-                        "description": "Derive how many persisted items introduce new Words.",
+                        "description": "Return how many assigned session Words introduce new material.",
                         "readOnly": true
                     },
-                    "item_count": {
+                    "word_count": {
                         "type": "integer",
-                        "description": "Derive total progress from the persisted session items.",
+                        "description": "Return how many unique Words belong to the daily session.",
                         "readOnly": true
                     },
                     "planner_version": {
@@ -1785,14 +1818,20 @@
                         "format": "date-time",
                         "nullable": true
                     },
-                    "answered_count": {
+                    "cleared_word_count": {
                         "type": "integer",
-                        "description": "Return how many planned items have accepted answers.",
+                        "description": "Return Words whose accepted outcome schedules them beyond today.",
                         "readOnly": true
                     },
-                    "remaining_count": {
+                    "remaining_word_count": {
                         "type": "integer",
-                        "description": "Return how many planned items still need an accepted answer.",
+                        "description": "Return unique session Words that are not yet cleared for today.",
+                        "readOnly": true
+                    },
+                    "next_ready_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true,
                         "readOnly": true
                     },
                     "current_item": {
@@ -1803,28 +1842,24 @@
                         ],
                         "nullable": true,
                         "readOnly": true
-                    },
-                    "items": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/StudySessionItem"
-                        },
-                        "readOnly": true
                     }
                 },
                 "required": [
-                    "answered_count",
+                    "cleared_word_count",
                     "corpus_version",
                     "created_at",
                     "current_item",
+                    "day_ends_at",
                     "id",
-                    "item_count",
-                    "items",
                     "new_word_target",
+                    "next_ready_at",
                     "planned_new_word_count",
                     "planner_version",
-                    "remaining_count",
-                    "status"
+                    "queue_state",
+                    "remaining_word_count",
+                    "status",
+                    "timezone",
+                    "word_count"
                 ]
             },
             "StudySessionItem": {
@@ -1837,7 +1872,7 @@
                     },
                     "position": {
                         "type": "integer",
-                        "maximum": 32767,
+                        "maximum": 2147483647,
                         "minimum": 0
                     },
                     "kind": {
@@ -1905,6 +1940,12 @@
                         }
                     },
                     "rating": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "timezone": {
                         "type": "array",
                         "items": {
                             "type": "string"

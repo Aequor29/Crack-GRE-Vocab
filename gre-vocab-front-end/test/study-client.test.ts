@@ -22,12 +22,10 @@ const item = buildStudyItem();
 
 const session = buildStudySession({
   current_item: item,
-  items: [item],
 });
 
 const answerResponse = buildStudyAnswerResponse(
   buildCompletedStudySession({
-    items: [item],
     planned_new_word_count: 1,
   }),
 );
@@ -123,12 +121,12 @@ describe("study API client", () => {
       .mockResolvedValueOnce(jsonResponse({ csrf_token: "study-token" }, 200))
       .mockResolvedValueOnce(jsonResponse(session, 201));
 
-    await expect(createStudySession(1, { fetcher })).resolves.toEqual(session);
+    await expect(createStudySession(1, "America/Chicago", { fetcher })).resolves.toEqual(session);
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
       "http://localhost:8000/api/study/sessions/",
       expect.objectContaining({
-        body: JSON.stringify({ new_word_target: 1 }),
+        body: JSON.stringify({ new_word_target: 1, timezone: "America/Chicago" }),
         credentials: "include",
         headers: expect.objectContaining({ "X-CSRFToken": "study-token" }),
         method: "POST",
@@ -193,7 +191,9 @@ describe("study API client", () => {
       kind: "unauthenticated",
       retryable: false,
     } satisfies Partial<StudyApiError>);
-    await expect(createStudySession(1, { fetcher: rejectedCsrfFetcher })).rejects.toMatchObject({
+    await expect(
+      createStudySession(1, "America/Chicago", { fetcher: rejectedCsrfFetcher }),
+    ).rejects.toMatchObject({
       kind: "csrf",
       retryable: true,
     } satisfies Partial<StudyApiError>);
@@ -227,7 +227,7 @@ describe("study API client", () => {
           jsonResponse({ code, detail: "Framework wording changed.", retryable: true }, status),
         );
 
-      const request = createStudySession(1, { fetcher });
+      const request = createStudySession(1, "America/Chicago", { fetcher });
       await expect(request).rejects.toMatchObject({
         code,
         kind: expectedKind,

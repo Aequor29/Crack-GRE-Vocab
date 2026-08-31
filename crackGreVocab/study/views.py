@@ -23,7 +23,6 @@ from rest_framework.status import (
 )
 from rest_framework.views import APIView
 
-from .selectors import get_active_study_session
 from .serializers import (
     CreateStudySessionSerializer,
     RecordRecallAnswerSerializer,
@@ -38,6 +37,7 @@ from .services import (
     StudyPlanningUnavailable,
     plan_study_session,
     record_recall_answer,
+    resume_active_study_session,
 )
 
 
@@ -111,13 +111,14 @@ class StudySessionCollectionView(StudyApiView):
             planned = plan_study_session(
                 learner=request.user,
                 new_word_target=serializer.validated_data["new_word_target"],
+                timezone_name=serializer.validated_data["timezone"],
             )
         except StudyPlanningUnavailable as exc:
             return Response(
                 {"code": exc.code, "detail": exc.detail},
                 status=HTTP_409_CONFLICT,
             )
-        except (InterfaceError, OperationalError):
+        except InterfaceError, OperationalError:
             return _database_temporarily_unavailable(
                 "The Study Session could not be persisted."
             )
@@ -145,8 +146,8 @@ class ActiveStudySessionView(StudyApiView):
     def get(self, request) -> Response:
         """Return the active Study Session or a not-found response."""
         try:
-            session = get_active_study_session(learner=request.user)
-        except (InterfaceError, OperationalError):
+            session = resume_active_study_session(learner=request.user)
+        except InterfaceError, OperationalError:
             return _database_temporarily_unavailable(
                 "The Study Session could not be loaded."
             )
@@ -202,7 +203,7 @@ class StudySessionAnswerView(StudyApiView):
             if exc.current_item_id is not None:
                 payload["current_item_id"] = exc.current_item_id
             return Response(payload, status=HTTP_409_CONFLICT)
-        except (InterfaceError, OperationalError):
+        except InterfaceError, OperationalError:
             return _database_temporarily_unavailable(
                 "The Recall Outcome could not be persisted."
             )

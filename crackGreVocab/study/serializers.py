@@ -1,5 +1,8 @@
 """JSON contracts for backend-planned Study Sessions."""
 
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from vocabulary.models import VocabularySense
@@ -13,6 +16,17 @@ class CreateStudySessionSerializer(serializers.Serializer):
         min_value=0,
         max_value=MAX_NEW_WORDS_PER_SESSION,
     )
+    timezone = serializers.CharField(max_length=64)
+
+    def validate_timezone(self, value: str) -> str:
+        """Require a valid IANA timezone for the session's daily cutoff."""
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise serializers.ValidationError(
+                "Enter a valid IANA timezone name."
+            ) from exc
+        return value
 
 
 class RecordRecallAnswerSerializer(serializers.Serializer):
@@ -54,59 +68,74 @@ class StudySessionItemSerializer(serializers.ModelSerializer):
 
 class StudySessionSerializer(serializers.ModelSerializer):
     corpus_version = serializers.CharField(source="corpus.version", read_only=True)
-    items = StudySessionItemSerializer(many=True, read_only=True)
+    timezone = serializers.CharField(source="timezone_name", read_only=True)
+    day_ends_at = serializers.DateTimeField(read_only=True)
     planned_new_word_count = serializers.SerializerMethodField()
-    item_count = serializers.SerializerMethodField()
-    answered_count = serializers.SerializerMethodField()
-    remaining_count = serializers.SerializerMethodField()
+    word_count = serializers.SerializerMethodField()
+    cleared_word_count = serializers.SerializerMethodField()
+    remaining_word_count = serializers.SerializerMethodField()
+    queue_state = serializers.SerializerMethodField()
+    next_ready_at = serializers.SerializerMethodField()
     current_item = serializers.SerializerMethodField()
 
-    @staticmethod
-    def _unanswered_items(session: StudySession) -> list[StudySessionItem]:
-        return [item for item in session.items.all() if not hasattr(item, "answer")]
-
-    def get_answered_count(self, session: StudySession) -> int:
-        """Return how many planned items have accepted answers."""
-        return self.get_item_count(session) - len(self._unanswered_items(session))
-
     def get_planned_new_word_count(self, session: StudySession) -> int:
-        """Derive how many persisted items introduce new Words."""
-        return sum(
-            item.kind == StudySessionItem.Kind.NEW for item in session.items.all()
-        )
+        """Return how many assigned session Words introduce new material."""
+        return session.planned_new_word_count_value
 
-    def get_item_count(self, session: StudySession) -> int:
-        """Derive total progress from the persisted session items."""
-        return len(session.items.all())
+    def get_word_count(self, session: StudySession) -> int:
+        """Return how many unique Words belong to the daily session."""
+        return session.word_count_value
 
-    def get_remaining_count(self, session: StudySession) -> int:
-        """Return how many planned items still need an accepted answer."""
-        return len(self._unanswered_items(session))
+    def get_cleared_word_count(self, session: StudySession) -> int:
+        """Return Words whose accepted outcome schedules them beyond today."""
+        return session.cleared_word_count_value
+
+    def get_remaining_word_count(self, session: StudySession) -> int:
+        """Return unique session Words that are not yet cleared for today."""
+        return self.get_word_count(session) - self.get_cleared_word_count(session)
+
+    @extend_schema_field(
+        serializers.ChoiceField(choices=("ready", "waiting", "completed", "abandoned"))
+    )
+    def get_queue_state(self, session: StudySession) -> str:
+        """Return the learner-visible availability state of the session queue."""
+        if session.status != StudySession.Status.ACTIVE:
+            return session.status
+        return "ready" if session.current_item_id is not None else "waiting"
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_next_ready_at(self, session: StudySession) -> datetime | None:
+        """Return the next unfinished Word readiness time while waiting."""
+        if self.get_queue_state(session) != "waiting":
+            return None
+        return session.next_ready_at_value
 
     @extend_schema_field(StudySessionItemSerializer(allow_null=True))
     def get_current_item(self, session: StudySession) -> dict[str, object] | None:
-        """Serialize the first unanswered item in the backend-planned order."""
-        unanswered = self._unanswered_items(session)
-        if not unanswered:
+        """Serialize the durable presentation attempt issued by the backend."""
+        if session.current_item is None:
             return None
-        return StudySessionItemSerializer(unanswered[0]).data
+        return StudySessionItemSerializer(session.current_item).data
 
     class Meta:
         model = StudySession
         fields = (
             "id",
             "status",
+            "queue_state",
             "corpus_version",
+            "timezone",
+            "day_ends_at",
             "new_word_target",
             "planned_new_word_count",
-            "item_count",
+            "word_count",
             "planner_version",
             "created_at",
             "ended_at",
-            "answered_count",
-            "remaining_count",
+            "cleared_word_count",
+            "remaining_word_count",
+            "next_ready_at",
             "current_item",
-            "items",
         )
 
 
@@ -169,6 +198,10 @@ class StudyValidationErrorSerializer(serializers.Serializer):
         required=False,
     )
     rating = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )
+    timezone = serializers.ListField(
         child=serializers.CharField(),
         required=False,
     )

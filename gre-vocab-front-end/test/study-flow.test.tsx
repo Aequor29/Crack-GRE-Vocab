@@ -57,18 +57,15 @@ const secondItem = buildStudyItem({
 const activeSession = buildStudySession({
   current_item: firstItem,
   id: "00000000-0000-4000-8000-000000000015",
-  item_count: 2,
-  items: [firstItem, secondItem],
   new_word_target: 2,
   planned_new_word_count: 2,
-  remaining_count: 2,
+  remaining_word_count: 2,
+  word_count: 2,
 });
 
 const nextSession = buildStudySession({
   ...activeSession,
-  answered_count: 1,
   current_item: secondItem,
-  remaining_count: 1,
 });
 
 const createStudySessionMock = vi.mocked(createStudySession);
@@ -106,6 +103,7 @@ describe("study session experience", () => {
     render(<StudySession />);
 
     expect(await screen.findByRole("heading", { name: "abate" })).toHaveFocus();
+    expect(screen.getByText("0 of 2 words done today")).toBeInTheDocument();
     expect(screen.queryByText("To become less intense.")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reveal meaning" }));
     expect(screen.getByText("To become less intense.")).toBeInTheDocument();
@@ -120,6 +118,7 @@ describe("study session experience", () => {
     });
     expect(submitted.client_request_id).toEqual(expect.any(String));
     expect(await screen.findByRole("heading", { name: "lucid" })).toHaveFocus();
+    expect(screen.getByText("0 of 2 words done today")).toBeInTheDocument();
     expect(screen.queryByText("Clear in expression.")).not.toBeInTheDocument();
   });
 
@@ -289,16 +288,19 @@ describe("study session experience", () => {
     expect(screen.getByRole("slider", { name: /new-word target/i })).toHaveValue("10");
     fireEvent.click(screen.getByRole("button", { name: "Start session" }));
 
-    await waitFor(() => expect(createStudySessionMock).toHaveBeenCalledWith(10));
+    await waitFor(() =>
+      expect(createStudySessionMock).toHaveBeenCalledWith(10, expect.any(String)),
+    );
     expect(await screen.findByRole("heading", { name: "abate" })).toBeInTheDocument();
   });
 
   it("celebrates only an explicitly completed session", async () => {
-    getActiveStudySessionMock.mockResolvedValue(buildCompletedStudySession());
+    getActiveStudySessionMock.mockResolvedValue(buildCompletedStudySession({ word_count: 12 }));
 
     render(<StudySession />);
 
     expect(await screen.findByRole("heading", { name: "Session complete" })).toBeInTheDocument();
+    expect(screen.getByText("All 12 words are done for today.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to dashboard" })).toHaveAttribute(
       "href",
       "/dashboard",
@@ -320,8 +322,9 @@ describe("study session experience", () => {
   it("recovers an active session that has no current item", async () => {
     const malformedActiveSession = buildStudySession({
       current_item: null,
-      item_count: 1,
-      remaining_count: 1,
+      queue_state: "ready",
+      remaining_word_count: 1,
+      word_count: 1,
     });
     getActiveStudySessionMock
       .mockResolvedValueOnce(malformedActiveSession)
@@ -333,6 +336,30 @@ describe("study session experience", () => {
       await screen.findByRole("heading", { name: "Study session needs attention" }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reload study progress" }));
+    expect(await screen.findByRole("heading", { name: "abate" })).toBeInTheDocument();
+  });
+
+  it("shows an active waiting state and resumes from the authoritative queue", async () => {
+    const waitingSession = buildStudySession({
+      current_item: null,
+      next_ready_at: "2099-08-07T05:10:00Z",
+      queue_state: "waiting",
+      remaining_word_count: 2,
+      word_count: 2,
+    });
+    getActiveStudySessionMock
+      .mockResolvedValueOnce(waitingSession)
+      .mockResolvedValueOnce(activeSession);
+
+    render(<StudySession />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Next word is not ready yet" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("0 of 2 words done today")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Check for a ready word" }));
     expect(await screen.findByRole("heading", { name: "abate" })).toBeInTheDocument();
   });
 

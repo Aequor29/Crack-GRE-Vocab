@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from accounts.models import LearnerAccount
-from django.db.models import Prefetch, QuerySet
+from django.db.models import Count, F, Min, Q, QuerySet
 from vocabulary.models import CorpusEntry, CorpusVersion
 
 from .models import LearnerWordState, RecallAnswer, StudySession, StudySessionItem
@@ -14,12 +14,27 @@ type DueItem = tuple[LearnerWordState, CorpusEntry]
 
 def study_session_queryset() -> QuerySet[StudySession]:
     """Load the stable response representation without per-item queries."""
-    items = StudySessionItem.objects.select_related(
-        "corpus_entry__word",
-        "answer__outcome",
-    ).prefetch_related("corpus_entry__senses")
-    return StudySession.objects.select_related("corpus").prefetch_related(
-        Prefetch("items", queryset=items),
+    return (
+        StudySession.objects.select_related(
+            "corpus",
+            "current_item__corpus_entry__word",
+        )
+        .prefetch_related("current_item__corpus_entry__senses")
+        .annotate(
+            planned_new_word_count_value=Count(
+                "session_words",
+                filter=Q(session_words__kind="new"),
+            ),
+            word_count_value=Count("session_words"),
+            cleared_word_count_value=Count(
+                "session_words",
+                filter=Q(session_words__cleared_at__isnull=False),
+            ),
+            next_ready_at_value=Min(
+                "session_words__ready_at",
+                filter=Q(session_words__cleared_at__isnull=True),
+            ),
+        )
     )
 
 
@@ -56,22 +71,49 @@ def get_recall_answer_for_item(*, item: StudySessionItem) -> RecallAnswer | None
     return RecallAnswer.objects.select_related("outcome").filter(item=item).first()
 
 
+def has_uncleared_session_words(*, session: StudySession) -> bool:
+    """Return whether the daily session still contains unfinished Words."""
+    return session.session_words.filter(cleared_at__isnull=True).exists()
+
+
+def select_ready_session_item(
+    *,
+    session: StudySession,
+    observed_at: datetime,
+) -> StudySessionItem | None:
+    """Return the fairest ready presentation attempt for an idle session."""
+    return (
+        StudySessionItem.objects.select_related("corpus_entry__word", "session_word")
+        .filter(
+            session=session,
+            session_word__is_in_active_window=True,
+            answer__isnull=True,
+            ready_at__lte=observed_at,
+        )
+        .order_by(
+            F("session_word__last_presented_position").asc(nulls_first=True),
+            "session_word__position",
+            "position",
+        )
+        .first()
+    )
+
+
 def select_due_study_items(
     *,
     learner: LearnerAccount,
     corpus: CorpusVersion,
-    planned_at: datetime,
-    limit: int,
+    due_before: datetime,
 ) -> tuple[DueItem, ...]:
-    """Select the learner's oldest due words from the active corpus."""
+    """Select the learner's scheduled Words due before the daily cutoff."""
     states = list(
         LearnerWordState.objects.filter(
             learner=learner,
-            next_due_at__lte=planned_at,
+            next_due_at__lt=due_before,
             word__corpus_entries__corpus=corpus,
         )
         .select_related("word")
-        .order_by("next_due_at", "word__normalized_term", "id")[:limit]
+        .order_by("next_due_at", "word__normalized_term", "id")
     )
     entries_by_word = {
         entry.word_id: entry
