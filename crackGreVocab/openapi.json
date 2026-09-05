@@ -1375,12 +1375,11 @@
             "QueueStateEnum": {
                 "enum": [
                     "ready",
-                    "waiting",
                     "completed",
                     "abandoned"
                 ],
                 "type": "string",
-                "description": "* `ready` - ready\n* `waiting` - waiting\n* `completed` - completed\n* `abandoned` - abandoned"
+                "description": "* `ready` - ready\n* `completed` - completed\n* `abandoned` - abandoned"
             },
             "RatingEnum": {
                 "enum": [
@@ -1828,12 +1827,6 @@
                         "description": "Return unique session Words that are not yet cleared for today.",
                         "readOnly": true
                     },
-                    "next_ready_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true,
-                        "readOnly": true
-                    },
                     "current_item": {
                         "allOf": [
                             {
@@ -1852,7 +1845,6 @@
                     "day_ends_at",
                     "id",
                     "new_word_target",
-                    "next_ready_at",
                     "planned_new_word_count",
                     "planner_version",
                     "queue_state",

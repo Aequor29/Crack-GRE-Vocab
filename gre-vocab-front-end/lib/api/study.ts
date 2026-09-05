@@ -232,7 +232,6 @@ function isStudySession(value: unknown): value is StudySession {
       session.status === "completed" ||
       session.status === "abandoned") &&
     (session.queue_state === "ready" ||
-      session.queue_state === "waiting" ||
       session.queue_state === "completed" ||
       session.queue_state === "abandoned") &&
     isString(session.corpus_version) &&
@@ -246,7 +245,6 @@ function isStudySession(value: unknown): value is StudySession {
     (session.ended_at === undefined || session.ended_at === null || isString(session.ended_at)) &&
     isNumber(session.cleared_word_count) &&
     isNumber(session.remaining_word_count) &&
-    (session.next_ready_at === null || isString(session.next_ready_at)) &&
     (session.current_item === null || isStudySessionItem(session.current_item))
   );
 }

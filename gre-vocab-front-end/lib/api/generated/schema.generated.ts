@@ -31,11 +31,10 @@ export type RatingEnum = "remembered" | "forgot";
 
 /**
  * * `ready` - ready
- * * `waiting` - waiting
  * * `completed` - completed
  * * `abandoned` - abandoned
  */
-export type QueueStateEnum = "ready" | "waiting" | "completed" | "abandoned";
+export type QueueStateEnum = "ready" | "completed" | "abandoned";
 
 /**
  * * `due` - Due review
@@ -367,8 +366,6 @@ export interface StudySession {
   cleared_word_count: number;
   /** Return unique session Words that are not yet cleared for today. */
   remaining_word_count: number;
-  /** @format date-time */
-  next_ready_at: string | null;
   current_item: StudySessionItem | null;
 }
 
