@@ -26,7 +26,24 @@ TypeScript, and a webpack production build. Run `npm run start` to serve that
 build, or `npm run dev` for interactive development. Both processes use port
 3000 by default; stop one before starting the other.
 
-The gates are local verification commands. Public deployment remains paused.
+GitHub Actions runs these gates and browser E2E on pull requests and pushes to
+`master`. Public deployment remains paused.
+
+## Full-stack browser verification
+
+The root `e2e/` package drives Chromium through the real frontend and API with
+an isolated PostgreSQL database. With its dependencies and Chromium installed,
+run from the root with the Python virtual environment active:
+
+```sh
+npm run verify --prefix e2e
+```
+
+The runner creates a fresh database, applies migrations, imports the checked
+corpus, builds and starts the applications, runs the tests, and cleans up its
+database and servers. Authentication, Study, and Learning Progress are verified
+through the browser, including recoverable failures. See [E2E](e2e/README.md)
+for PostgreSQL configuration, focused commands, and failure artifacts.
 
 ## Test design
 
