@@ -11,10 +11,20 @@ BACKEND = ROOT / "crackGreVocab"
 
 def main() -> None:
     """Check backend source, dependencies, database behavior, and API drift."""
+    arguments: tuple[str, ...]
     for arguments in (
-        ("-m", "ruff", "check", "crackGreVocab", "scripts"),
-        ("-m", "mypy", "crackGreVocab", "scripts"),
-        ("-m", "compileall", "-q", "-x", r"(^|/)[.]", "crackGreVocab", "scripts"),
+        ("-m", "ruff", "check", "crackGreVocab", "scripts", "e2e"),
+        ("-m", "mypy", "crackGreVocab", "scripts", "e2e"),
+        (
+            "-m",
+            "compileall",
+            "-q",
+            "-x",
+            r"(^|/)([.]|node_modules|artifacts|test-results|playwright-report)",
+            "crackGreVocab",
+            "scripts",
+            "e2e",
+        ),
         ("-m", "pip", "check"),
     ):
         subprocess.run([sys.executable, *arguments], cwd=ROOT, check=True)

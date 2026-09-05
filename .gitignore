@@ -23,6 +23,7 @@ staticfiles/
 # Node and Next.js
 node_modules/
 .next/
+.next-e2e/
 out/
 coverage/
 *.tsbuildinfo
@@ -35,3 +36,9 @@ Thumbs.db
 
 # Local deployment state
 .vercel/
+
+# Browser verification output
+e2e/.run.lock
+e2e/artifacts/
+e2e/test-results/
+e2e/playwright-report/

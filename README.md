@@ -9,12 +9,14 @@ The application includes Django/PostgreSQL account and study APIs, a typed
 Next.js frontend, Google sign-in, password recovery, continuous daily study
 sessions, and a learning-progress dashboard. Progress includes mastery counts,
 adjacent seven-day recall comparisons, study activity, streaks, and a weekly
-learning curve. Hosted infrastructure and deployment automation remain paused.
+learning curve. GitHub Actions verifies the application and critical browser
+flows. Hosted infrastructure and deployment automation remain paused.
 
 ## Repository layout
 
 - `crackGreVocab/` — Django REST Framework backend
 - `gre-vocab-front-end/` — Next.js frontend
+- `e2e/` — independent Playwright full-stack browser tests
 - `crackGreVocab/data/GRE_word.csv` — Milestone 1 vocabulary source
 - `crackGreVocab/vocabulary/README.md` — corpus rebuild and import runbook
 
@@ -167,8 +169,10 @@ npm run verify
 ```
 
 It checks generated TypeScript drift, Biome, unit/component tests, TypeScript,
-and the webpack production build. Both gates are local commands and leave
-deployment automation paused. See [Testing](TESTING.md) for coverage guidance.
+and the webpack production build. GitHub Actions runs both gates plus the root
+E2E package. Run `npm run verify --prefix e2e` with the virtual environment active
+after following the [E2E setup](e2e/README.md). Deployment automation stays
+paused. See [Testing](TESTING.md) for coverage guidance.
 
 Regenerate the typed API boundary after an intentional endpoint change, starting
 from the repository root:
@@ -214,6 +218,6 @@ its learner-facing content is unchanged from `m1-v1`. Builds and imports fail
 closed on changed or invalid input, and the application never depends on
 dictionary APIs at runtime.
 
-Email verification delivery, Vercel, preview deployments, CI/CD, public domains,
-legacy migrations, and legacy authentication are intentionally out of scope
-until their dedicated milestones.
+Email verification delivery, Vercel, preview deployments, deployment automation,
+public domains, legacy migrations, and legacy authentication are intentionally
+out of scope until their dedicated milestones.
