@@ -106,7 +106,7 @@ export function AccountForm({ googleStatus, mode }: AccountFormProps) {
       </div>
 
       {auth.status === "unavailable" ? (
-        <p className="rounded-2xl bg-amber-500/10 p-4 text-sm text-foreground" role="status">
+        <p className="rounded-2xl bg-warning-soft p-4 text-sm text-foreground" role="status">
           We couldn&apos;t connect. You can still try submitting the form again.
         </p>
       ) : null}

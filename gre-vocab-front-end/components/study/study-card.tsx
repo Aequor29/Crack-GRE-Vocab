@@ -59,7 +59,7 @@ export function StudyCard({
         </div>
 
         {revealed ? (
-          <div className="mx-auto mt-10 max-w-2xl space-y-8 border-t border-black/10 pt-8 text-left dark:border-white/10">
+          <div className="mx-auto mt-10 max-w-2xl space-y-8 border-t border-separator pt-8 text-left">
             {item.senses.map((sense) => (
               <div className="space-y-3" key={`${sense.position}-${sense.definition}`}>
                 <p className="text-2xl font-semibold leading-9 sm:text-3xl sm:leading-10">

@@ -9,7 +9,7 @@ const navigation = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-black/10 bg-background/85 backdrop-blur-xl dark:border-white/10">
+    <header className="sticky top-0 z-40 border-b border-separator bg-background/85 backdrop-blur-xl">
       <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
         <Link
           aria-label="Crack GRE Vocab home"
