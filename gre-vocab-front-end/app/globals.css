@@ -1,17 +1,76 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-:root {
-  --accent: oklch(0.53 0.2 278);
-  --accent-foreground: oklch(0.99 0 0);
+@theme static {
+  --color-pale-sky-50: #eef4f6;
+  --color-pale-sky-100: #dde9ee;
+  --color-pale-sky-200: #bbd3dd;
+  --color-pale-sky-300: #99bdcc;
+  --color-pale-sky-400: #77a6bb;
+  --color-pale-sky-500: #5590aa;
+  --color-pale-sky-600: #447388;
+  --color-pale-sky-700: #335766;
+  --color-pale-sky-800: #223a44;
+  --color-pale-sky-900: #111d22;
+  --color-pale-sky-950: #0c1418;
+}
+
+:root,
+.light,
+[data-theme="light"] {
+  --background: var(--color-pale-sky-50);
+  --foreground: var(--color-pale-sky-950);
+  --surface: var(--color-pale-sky-100);
+  --surface-foreground: var(--foreground);
+  --surface-secondary: var(--color-pale-sky-100);
+  --surface-secondary-foreground: var(--foreground);
+  --surface-tertiary: var(--color-pale-sky-200);
+  --surface-tertiary-foreground: var(--foreground);
+  --overlay: var(--color-pale-sky-50);
+  --overlay-foreground: var(--foreground);
+  --muted: var(--color-pale-sky-700);
+  --default: var(--color-pale-sky-200);
+  --default-foreground: var(--foreground);
+  --accent: var(--color-pale-sky-700);
+  --accent-foreground: var(--color-pale-sky-50);
+  --accent-soft: var(--color-pale-sky-200);
+  --accent-soft-foreground: var(--color-pale-sky-800);
+  --accent-soft-hover: var(--color-pale-sky-300);
+  --field-background: var(--color-pale-sky-50);
+  --field-foreground: var(--foreground);
+  --field-placeholder: var(--muted);
+  --field-border: var(--color-pale-sky-300);
+  --segment: var(--color-pale-sky-50);
+  --segment-foreground: var(--foreground);
+  --border: var(--color-pale-sky-200);
+  --separator: var(--color-pale-sky-200);
+  --focus: var(--color-pale-sky-600);
+  --link: var(--accent);
   --radius: 0.85rem;
   --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 .dark,
 [data-theme="dark"] {
-  --accent: oklch(0.74 0.15 278);
-  --accent-foreground: oklch(0.14 0.02 278);
+  --background: var(--color-pale-sky-950);
+  --foreground: var(--color-pale-sky-50);
+  --surface: var(--color-pale-sky-900);
+  --surface-secondary: var(--color-pale-sky-900);
+  --surface-tertiary: var(--color-pale-sky-800);
+  --overlay: var(--color-pale-sky-800);
+  --muted: var(--color-pale-sky-300);
+  --default: var(--color-pale-sky-800);
+  --accent: var(--color-pale-sky-400);
+  --accent-foreground: var(--color-pale-sky-950);
+  --accent-soft: var(--color-pale-sky-800);
+  --accent-soft-foreground: var(--color-pale-sky-200);
+  --accent-soft-hover: var(--color-pale-sky-700);
+  --field-background: var(--color-pale-sky-950);
+  --field-border: var(--color-pale-sky-700);
+  --segment: var(--color-pale-sky-800);
+  --border: var(--color-pale-sky-800);
+  --separator: var(--color-pale-sky-800);
+  --focus: var(--color-pale-sky-400);
 }
 
 * {

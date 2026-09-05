@@ -15,7 +15,7 @@ export default function ForgotPasswordPage() {
     >
       <section
         aria-labelledby="forgot-password-title"
-        className="w-full max-w-lg rounded-[2rem] border border-black/10 bg-surface/90 p-7 shadow-2xl shadow-black/10 sm:p-10 dark:border-white/10 dark:shadow-black/30"
+        className="w-full max-w-lg rounded-[2rem] border border-separator bg-surface/90 p-7 shadow-2xl shadow-pale-sky-950/10 sm:p-10 dark:shadow-pale-sky-950/30"
       >
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">Account recovery</p>
         <h1 className="mt-3 text-4xl font-black tracking-[-0.04em]" id="forgot-password-title">

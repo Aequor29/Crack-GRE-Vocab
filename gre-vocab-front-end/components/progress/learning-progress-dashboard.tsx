@@ -76,7 +76,7 @@ function Coverage({ summary }: { summary: LearningProgressSummary }) {
           <ProgressBar.Fill />
         </ProgressBar.Track>
       </ProgressBar>
-      <dl className="mt-7 grid grid-cols-2 gap-4 border-t border-black/10 pt-6 sm:grid-cols-4 dark:border-white/10">
+      <dl className="mt-7 grid grid-cols-2 gap-4 border-t border-separator pt-6 sm:grid-cols-4">
         <div>
           <dt className="text-sm text-foreground/60">Learning</dt>
           <dd className="mt-1 text-2xl font-black">{formatNumber(summary.corpus.learning)}</dd>
@@ -115,7 +115,7 @@ function StudyAction({ summary }: { summary: LearningProgressSummary }) {
         className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-accent/20 blur-3xl"
       />
       <div className="relative flex h-full flex-col">
-        <p className="text-sm font-bold uppercase tracking-[0.18em] opacity-60">Next up</p>
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-muted">Next up</p>
         <p className="mt-4 text-6xl font-black tracking-[-0.06em] sm:text-7xl">
           {formatNumber(summary.actionable.due_now)}
         </p>

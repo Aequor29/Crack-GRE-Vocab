@@ -22,6 +22,15 @@ product-specific visual treatment. Internal navigation continues to use
 Next.js `Link` so routing stays client-side; button-like navigation uses HeroUI
 variant styles rather than changing a link into a button.
 
+## Color theme
+
+`app/globals.css` defines the pale-sky scale and maps it to HeroUI's semantic
+tokens for light and dark mode. Update those mappings to change surfaces,
+foregrounds, accents, borders, fields, and focus colors throughout the app.
+Components use semantic utilities such as `bg-surface`, `text-accent`, and
+`border-separator`. HeroUI retains the status colors for errors and warnings.
+The browser theme-color values are in `app/layout.tsx`.
+
 ## Local setup
 
 From the repository root:

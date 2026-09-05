@@ -45,7 +45,7 @@ export function StudySessionPlanner({
         </div>
       ) : null}
 
-      <div className="grid gap-5 rounded-3xl border border-black/10 p-6 dark:border-white/10 sm:grid-cols-[1fr_auto] sm:items-end">
+      <div className="grid gap-5 rounded-3xl border border-separator p-6 sm:grid-cols-[1fr_auto] sm:items-end">
         <div>
           <p className="font-bold">New-word target</p>
           <p className="mt-2 text-sm font-normal text-foreground/60">
