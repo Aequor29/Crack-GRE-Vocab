@@ -15,7 +15,7 @@ type DueItem = tuple[LearnerWordState, CorpusEntry]
 
 
 def study_session_queryset() -> QuerySet[StudySession]:
-    """Load the stable response representation without per-item queries."""
+    """Load session progress and the current Word for API responses."""
     return (
         StudySession.objects.select_related(
             "corpus",
@@ -78,7 +78,7 @@ def select_next_session_item(
     *,
     session: StudySession,
 ) -> StudySessionItem | None:
-    """Rotate through unfinished Words without gating on scheduled review time."""
+    """Select the least recently presented unfinished Word."""
     return (
         StudySessionItem.objects.select_related("corpus_entry__word", "session_word")
         .filter(

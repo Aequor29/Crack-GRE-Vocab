@@ -1,4 +1,4 @@
-"""AEQ-15 transactional Recall Answer and Outcome coverage."""
+"""Accepted recall answers and scheduling outcomes."""
 
 import uuid
 from datetime import UTC, datetime, timedelta

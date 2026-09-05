@@ -40,18 +40,18 @@ The supported providers and parser behavior live in code. The checked
 - `data/vocabulary/enrichment/fallback.jsonl`: resumable raw HTTP cache.
 - `data/vocabulary/versions/<version>/`: immutable corpus and manifest releases.
 
-Legacy CSV hints remain useful evidence during candidate alignment and review,
-but they are not a second persisted domain model. An editor approves learning
-content; they do not need to classify every old hint as retained or rejected.
+CSV definitions inform candidate alignment. Editors approve paired definitions
+and examples for the learning corpus.
 
 ## Rebuild workflow
 
-Run commands from `crackGreVocab` with the branch-local virtual environment.
+Activate the repository-root `.venv`, then run these commands from
+`crackGreVocab/`.
 
 1. Audit the retained source:
 
    ```sh
-   .venv/bin/python manage.py audit_vocabulary_source \
+   python manage.py audit_vocabulary_source \
      --source data/GRE_word.csv \
      --duplicate-decisions data/vocabulary/duplicate-decisions.json \
      --output data/vocabulary/source-audit.json
@@ -60,7 +60,7 @@ Run commands from `crackGreVocab` with the branch-local virtual environment.
 2. Download and checksum-verify the pinned OEWN archive:
 
    ```sh
-   .venv/bin/python manage.py refresh_vocabulary_snapshot \
+   python manage.py refresh_vocabulary_snapshot \
      --providers data/vocabulary/providers.json \
      --provider oewn-2025 \
      --destination .cache/vocabulary/english-wordnet-2025-json.zip
@@ -69,7 +69,7 @@ Run commands from `crackGreVocab` with the branch-local virtual environment.
 3. Generate the deterministic review queue from local inputs:
 
    ```sh
-   .venv/bin/python manage.py prepare_vocabulary_review \
+   python manage.py prepare_vocabulary_review \
      --source data/GRE_word.csv \
      --duplicate-decisions data/vocabulary/duplicate-decisions.json \
      --providers data/vocabulary/providers.json \
@@ -80,14 +80,13 @@ Run commands from `crackGreVocab` with the branch-local virtual environment.
      --output data/vocabulary/review-queue.json
    ```
 
-   The checked Milestone 1 queue is empty. Tests assert the queue policy, source
-   digest, and absence of actionable items rather than historical accounting
-   totals for how each word happened to resolve.
+   The checked review queue has no unresolved items. Regenerate it after changing
+   source data or editorial decisions.
 
 4. Fetch a bounded fallback batch when the queue requires it:
 
    ```sh
-   .venv/bin/python manage.py fetch_vocabulary_fallbacks \
+   python manage.py fetch_vocabulary_fallbacks \
      --providers data/vocabulary/providers.json \
      --provider freedictionaryapi-v1 \
      --review-queue data/vocabulary/review-queue.json \
@@ -147,7 +146,7 @@ Run commands from `crackGreVocab` with the branch-local virtual environment.
 6. Build the current immutable release offline:
 
    ```sh
-   .venv/bin/python manage.py build_vocabulary_corpus \
+   python manage.py build_vocabulary_corpus \
      --source data/GRE_word.csv \
      --duplicate-decisions data/vocabulary/duplicate-decisions.json \
      --providers data/vocabulary/providers.json \
@@ -167,7 +166,7 @@ Run commands from `crackGreVocab` with the branch-local virtual environment.
 7. Validate and atomically import the release into PostgreSQL:
 
    ```sh
-   .venv/bin/python manage.py import_vocabulary_corpus \
+   python manage.py import_vocabulary_corpus \
      data/vocabulary/versions/m1-v2/manifest.json \
      --report .cache/vocabulary/m1-v2-import-report.json
    ```
@@ -179,11 +178,8 @@ Run commands from `crackGreVocab` with the branch-local virtual environment.
 ## Verification
 
 ```sh
-.venv/bin/ruff check .
-.venv/bin/mypy .
-.venv/bin/python manage.py makemigrations --check --dry-run
-.venv/bin/python manage.py check
-.venv/bin/python manage.py test
+cd ..
+python scripts/verify_backend.py
 ```
 
 Tests use synthetic provider responses and never require live HTTP. The checked
@@ -194,5 +190,6 @@ release membership is compared directly with the audited `GRE_word.csv` list.
 `data/vocabulary/versions/m1-v2/` contains 3,034 words and 3,389 paired senses.
 Its corpus SHA-256 is
 `b7ab61e2771b9097ea715861c448c6da2bd6ef3cda1eeb4b6a57327b6eac47bb`.
-The learner-facing terms, definitions, and examples are unchanged from m1-v1;
-m1-v2 simplifies review metadata and records the new checked-input digests.
+Initialize a fresh local database through the current migrations, then import
+this manifest to make the release available for study. The complete local setup
+and verification commands are in the [root README](../../README.md).

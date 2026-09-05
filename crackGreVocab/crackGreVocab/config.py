@@ -30,7 +30,7 @@ def optional_env_string(name: str) -> str:
 
 
 def http_url(name: str, *, default: str | None = None) -> str:
-    """Return an absolute HTTP URL without credentials, query, or fragment."""
+    """Validate an absolute HTTP origin URL."""
     value = env_string(name, default=default)
     try:
         parsed = urlparse(value)
@@ -72,7 +72,7 @@ def postgres_database_url(name: str = "DATABASE_URL") -> str:
 
 
 def env_bool(name: str, *, default: bool) -> bool:
-    """Parse an explicit boolean without treating arbitrary strings as true."""
+    """Parse a boolean configuration value."""
     raw_value = os.environ.get(name)
     if raw_value is None:
         return default

@@ -5,12 +5,11 @@ active recall and adaptive review. The project is currently a private,
 local-only cold rebuild: the previous prototype is retired, and Milestone 1 is
 not a generally available product.
 
-The current foundation includes a supported Django/PostgreSQL backend, a clean
-Next.js application shell, a generated typed API boundary, Learner Accounts,
-backend-planned study sessions, answer recovery, and a dashboard shell. Progress
-reporting now gives each learner current corpus coverage, due work, today's
-activity, and an obvious next-study action. Hosted infrastructure and
-deployment automation remain separately scoped work.
+The application includes Django/PostgreSQL account and study APIs, a typed
+Next.js frontend, Google sign-in, password recovery, continuous daily study
+sessions, and a learning-progress dashboard. Progress includes mastery counts,
+adjacent seven-day recall comparisons, study activity, streaks, and a weekly
+learning curve. Hosted infrastructure and deployment automation remain paused.
 
 ## Repository layout
 
@@ -69,8 +68,8 @@ the service:
 ```bash
 cd crackGreVocab
 python manage.py migrate --noinput
+python manage.py import_vocabulary_corpus data/vocabulary/versions/m1-v2/manifest.json
 python manage.py check --database default
-python manage.py test --noinput --verbosity 2
 python manage.py runserver --noreload
 ```
 
@@ -103,9 +102,11 @@ a learner can correct an accidental repeat signup. This deliberately reveals
 account existence. Request throttling and reconsideration of that disclosure
 belong to pre-GA security hardening, before the app is publicly reachable.
 
-`LearnerAccount` is the first clean account schema. If an older local foundation
-database was migrated before this model existed, recreate the empty local
-database; no prototype user or authentication migration is supported.
+The supported schema setup starts with an empty PostgreSQL database and applies
+the current migrations. When rebuilding disposable local data, use a fresh
+database, apply the schema, and import the checked corpus. Preserve any local
+data you need before a rebuild. Existing local accounts and progress belong to
+that database; the rebuild creates a fresh learning environment.
 
 ## Password recovery contract
 
@@ -147,43 +148,42 @@ credentials and explicit HTTPS callback and frontend URLs are configured.
 
 ## Quality checks
 
-Run frontend checks from `gre-vocab-front-end/`:
+With the root virtual environment active and local PostgreSQL configured, run
+the complete backend gate from the repository root:
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
-npm run build
+python scripts/verify_backend.py
 ```
 
-Run backend checks from `crackGreVocab/` with the virtual environment active:
+It covers accounts, API, configuration, progress, study, vocabulary, migrations,
+tests, and verification scripts with Ruff, mypy, compilation, dependency checks,
+Django checks, schema drift, fresh-PostgreSQL tests, and published OpenAPI drift.
+The database role needs permission to create the isolated test database.
+
+Run the frontend gate from `gre-vocab-front-end/` after `nvm use`:
 
 ```bash
-ruff check accounts api crackGreVocab tests manage.py
-mypy accounts api crackGreVocab tests manage.py
-python -m compileall -q accounts api crackGreVocab tests manage.py
-python -m pip check
-python manage.py check --database default
-python manage.py makemigrations --check --dry-run
-python manage.py test --noinput --verbosity 2
+npm run verify
 ```
 
-Regenerate and validate the typed API boundary after changing an endpoint:
+It checks generated TypeScript drift, Biome, unit/component tests, TypeScript,
+and the webpack production build. Both gates are local commands and leave
+deployment automation paused. See [Testing](TESTING.md) for coverage guidance.
+
+Regenerate the typed API boundary after an intentional endpoint change, starting
+from the repository root:
 
 ```bash
 cd crackGreVocab
 python manage.py spectacular --file openapi.json --format openapi-json --validate --fail-on-warn
 cd ../gre-vocab-front-end
 npm run api:generate
-npm run typecheck
 cd ..
-git diff --exit-code -- crackGreVocab/openapi.json gre-vocab-front-end/lib/api/generated
 ```
 
-On a clean checkout, that final command fails when the committed schema or
-generated TypeScript types have drifted. `npm run api:check` is the shorthand
-frontend drift gate after `openapi.json` has been regenerated. Review and commit
-both artifacts when an API change is intentional.
+Review and commit both artifacts together. The backend gate compares a freshly
+generated schema with the committed document, and the frontend gate regenerates
+the client types and checks their diff.
 
 ## Local full-stack smoke
 

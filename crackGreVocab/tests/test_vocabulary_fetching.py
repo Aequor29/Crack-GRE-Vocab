@@ -1,4 +1,4 @@
-"""Bounded, resumable network acquisition tests without live HTTP."""
+"""Bounded and resumable vocabulary acquisition."""
 
 import fcntl
 import io

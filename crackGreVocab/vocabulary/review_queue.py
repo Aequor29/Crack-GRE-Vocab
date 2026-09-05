@@ -135,5 +135,5 @@ def build_review_queue(
 
 
 def write_review_queue(path: Path, document: dict[str, Any]) -> None:
-    """Replace a generated queue atomically without touching reviewed decisions."""
+    """Save the generated review queue atomically."""
     atomic_replace_bytes(path, canonical_json_bytes(document))

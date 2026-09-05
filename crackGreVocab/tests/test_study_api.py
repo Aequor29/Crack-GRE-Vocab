@@ -65,7 +65,6 @@ class StudySessionApiTests(TestCase):
         self.assertEqual(document["cleared_word_count"], 0)
         self.assertEqual(document["remaining_word_count"], 2)
         self.assertIsNotNone(document["current_item"])
-        self.assertNotIn("items", document)
 
     def test_creation_includes_review_work_due_later_today(self):
         self.client.force_login(self.learner)

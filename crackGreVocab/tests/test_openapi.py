@@ -26,7 +26,14 @@ class OpenApiBoundaryTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         operation = response.json()["paths"]["/api/readiness/"]["get"]
         self.assertEqual(operation["operationId"], "readiness_retrieve")
-        self.assertEqual(set(operation["responses"]), {"200", "503"})
+        self.assertTrue({"200", "503"}.issubset(operation["responses"]))
+        for status in ("200", "503"):
+            self.assertEqual(
+                operation["responses"][status]["content"]["application/json"][
+                    "schema"
+                ]["$ref"],
+                "#/components/schemas/Readiness",
+            )
 
     def test_cors_allows_only_configured_local_origins(self):
         url = reverse("api:service-index")

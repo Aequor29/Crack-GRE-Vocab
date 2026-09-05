@@ -53,16 +53,12 @@ export function savePendingAnswer(learnerId: number, input: RecallAnswerInput): 
   };
   try {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(pending));
-  } catch {
-    // The in-memory copy still preserves the request ID for this page lifetime.
-  }
+  } catch {}
   return pending;
 }
 
 export function clearPendingAnswer(): void {
   try {
     window.sessionStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Storage may be unavailable in privacy-restricted browsers.
-  }
+  } catch {}
 }

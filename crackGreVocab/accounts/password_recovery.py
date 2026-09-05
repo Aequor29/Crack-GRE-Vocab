@@ -1,4 +1,4 @@
-"""Password-recovery delivery for clean-rebuild learner accounts."""
+"""Learner password recovery and reset validation."""
 
 import logging
 from urllib.parse import urlencode
@@ -68,7 +68,7 @@ def send_password_reset_email(account: LearnerAccount) -> None:
 
 
 def deliver_password_reset_if_recoverable(email: str) -> None:
-    """Deliver recovery when possible without exposing lookup or mail failures."""
+    """Send password recovery instructions to an eligible learner."""
     account = LearnerAccount.objects.filter(email=email, is_active=True).first()
     if account is None or not account.has_usable_password():
         return

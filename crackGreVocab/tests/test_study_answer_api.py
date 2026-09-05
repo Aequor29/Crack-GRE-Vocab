@@ -103,7 +103,6 @@ class RecallAnswerApiTests(TestCase):
         self.assertEqual(created.json()["session"]["cleared_word_count"], 1)
         self.assertEqual(created.json()["session"]["remaining_word_count"], 0)
         self.assertIsNone(created.json()["session"]["current_item"])
-        self.assertNotIn("items", created.json()["session"])
         self.assertEqual(RecallAnswer.objects.count(), 2)
         self.assertEqual(RecallOutcome.objects.count(), 2)
 

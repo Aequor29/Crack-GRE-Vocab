@@ -93,7 +93,7 @@
         "/api/auth/google/link/cancel/": {
             "post": {
                 "operationId": "auth_google_link_cancel_create",
-                "description": "Cancel the pending link without touching either identity.",
+                "description": "Cancel the pending Google account link.",
                 "parameters": [
                     {
                         "in": "header",
@@ -232,7 +232,7 @@
         "/api/auth/password-reset/": {
             "post": {
                 "operationId": "auth_password_reset_create",
-                "description": "Send recovery instructions without revealing account existence.",
+                "description": "Accept a password recovery request.",
                 "parameters": [
                     {
                         "in": "header",
@@ -476,7 +476,7 @@
         "/api/auth/sign-out/": {
             "post": {
                 "operationId": "auth_sign_out_create",
-                "description": "End the current session without exposing whether it existed.",
+                "description": "End the current browser session.",
                 "parameters": [
                     {
                         "in": "header",
@@ -751,7 +751,7 @@
         "/api/readiness/": {
             "get": {
                 "operationId": "readiness_retrieve",
-                "description": "Check the database without exposing connection failure details.",
+                "description": "Return the database readiness status.",
                 "tags": [
                     "readiness"
                 ],
@@ -786,6 +786,17 @@
             "post": {
                 "operationId": "study_session_create",
                 "description": "Plan a bounded Study Session for the authenticated learner.",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-CSRFToken",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Masked token from GET /api/auth/csrf/.",
+                        "required": true
+                    }
+                ],
                 "tags": [
                     "study"
                 ],
@@ -883,6 +894,15 @@
                 "operationId": "study_session_answer_create",
                 "description": "Persist a recall answer and return authoritative study progress.",
                 "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-CSRFToken",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Masked token from GET /api/auth/csrf/.",
+                        "required": true
+                    },
                     {
                         "in": "path",
                         "name": "item_id",
@@ -1610,7 +1630,7 @@
             },
             "SignUpRequest": {
                 "type": "object",
-                "description": "Validate and create a clean-rebuild learner account.",
+                "description": "Validate signup details and create a learner account.",
                 "properties": {
                     "email": {
                         "type": "string",

@@ -1,4 +1,4 @@
-"""Routes for foundational local API contracts."""
+"""Service identity, readiness, and API schema routes."""
 
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView

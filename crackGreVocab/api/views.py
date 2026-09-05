@@ -1,4 +1,4 @@
-"""Foundational API views that do not depend on product data."""
+"""API identification and database readiness endpoints."""
 
 from django.db import Error, connection
 from drf_spectacular.utils import extend_schema
@@ -13,7 +13,7 @@ from .serializers import ReadinessSerializer, ServiceIndexSerializer
 
 
 class ServiceIndexView(APIView):
-    """Identify the local API process without claiming database readiness."""
+    """Return the API service identity."""
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
@@ -45,7 +45,7 @@ class ReadinessView(APIView):
         },
     )
     def get(self, request: Request) -> Response:
-        """Check the database without exposing connection failure details."""
+        """Return the database readiness status."""
         try:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")

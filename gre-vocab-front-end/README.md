@@ -63,16 +63,20 @@ frontend never stores a bearer token in local or session storage.
 ## Quality checks
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm run start
+npm run verify
 ```
+
+The gate runs generated-contract drift checks, Biome, unit/component tests,
+TypeScript, and the webpack production build. The complete backend gate is
+`python scripts/verify_backend.py` from the repository root with its virtual
+environment active. Run both gates before review; see [Testing](../TESTING.md).
 
 The focused tests cover the application shell, dashboard progress and recovery,
 typed account, progress, and study contracts, protected account behavior,
-accessible form errors, study recovery, and sign out. Product feature tests
+accessible form errors, study recovery, and sign out. Daily sessions rotate
+through their unfinished words until each next review reaches the session's
+local-day boundary. The progress bar counts completed words. Reloading restores
+the current word, and completion offers a dashboard link. Product feature tests
 stay with the behavior they exercise.
 
 ## Typed API contract

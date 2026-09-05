@@ -154,7 +154,7 @@ class StudySession(models.Model):
         return f"{self.learner_id}: {self.id} ({self.status})"
 
     def close(self, status: str, *, at=None) -> None:
-        """Close an active session without discarding accepted history."""
+        """Mark an active session as abandoned."""
         if status not in {self.Status.COMPLETED, self.Status.ABANDONED}:
             raise ValueError(
                 "A Study Session can only close as completed or abandoned."

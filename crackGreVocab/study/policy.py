@@ -1,4 +1,4 @@
-"""Milestone 1 Study queue constants shared by validation and planning."""
+"""Study queue limits and planning policy version."""
 
 MAX_ACTIVE_STUDY_WORDS = 30
 MAX_NEW_WORDS_PER_SESSION = 20

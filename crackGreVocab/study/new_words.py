@@ -1,4 +1,4 @@
-"""Deterministic new-Word selection without a stored learner deck."""
+"""Stable learner-specific ordering of new Words."""
 
 import hashlib
 import json

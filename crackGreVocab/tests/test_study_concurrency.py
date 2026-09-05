@@ -1,4 +1,4 @@
-"""AEQ-16 PostgreSQL concurrency and retry guarantees."""
+"""Concurrent study requests and answer retries."""
 
 import uuid
 from concurrent.futures import ThreadPoolExecutor

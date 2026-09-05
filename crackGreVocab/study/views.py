@@ -1,6 +1,7 @@
 """Authenticated Study Session planning and resume endpoints."""
 
 from accounts.authentication import CsrfRejected
+from api.schema import CSRF_HEADER_PARAMETER
 from django.db import InterfaceError, OperationalError
 from drf_spectacular.utils import extend_schema
 from rest_framework.exceptions import (
@@ -92,6 +93,7 @@ class StudySessionCollectionView(StudyApiView):
 
     @extend_schema(
         operation_id="study_session_create",
+        parameters=[CSRF_HEADER_PARAMETER],
         request=CreateStudySessionSerializer,
         responses={
             200: StudySessionSerializer,
@@ -169,6 +171,7 @@ class StudySessionAnswerView(StudyApiView):
 
     @extend_schema(
         operation_id="study_session_answer_create",
+        parameters=[CSRF_HEADER_PARAMETER],
         request=RecordRecallAnswerSerializer,
         responses={
             200: StudyAnswerResponseSerializer,

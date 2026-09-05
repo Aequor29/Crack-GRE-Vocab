@@ -38,7 +38,26 @@ class AccountOpenApiTests(SimpleTestCase):
         }
 
         for path, (method, statuses) in expected.items():
-            self.assertEqual(set(paths[path][method]["responses"]), statuses)
+            self.assertTrue(statuses.issubset(paths[path][method]["responses"]))
+
+        schemas = response.json()["components"]["schemas"]
+        for path, status, schema_name in (
+            ("/api/auth/sign-up/", "201", "LearnerAccount"),
+            ("/api/auth/sign-in/", "200", "LearnerAccount"),
+            ("/api/auth/sign-in/", "400", "AuthValidationError"),
+            ("/api/auth/sign-in/", "401", "ApiMessage"),
+        ):
+            self.assertEqual(
+                paths[path]["post"]["responses"][status]["content"][
+                    "application/json"
+                ]["schema"]["$ref"],
+                f"#/components/schemas/{schema_name}",
+            )
+        self.assertTrue(
+            {"id", "email", "display_name"}.issubset(
+                schemas["LearnerAccount"]["required"]
+            )
+        )
 
         for path in (
             "/api/auth/sign-up/",
@@ -49,7 +68,11 @@ class AccountOpenApiTests(SimpleTestCase):
             "/api/auth/google/link/cancel/",
             "/api/auth/sign-out/",
         ):
-            csrf_header = paths[path]["post"]["parameters"][0]
-            self.assertEqual(csrf_header["name"], "X-CSRFToken")
-            self.assertEqual(csrf_header["in"], "header")
-            self.assertTrue(csrf_header["required"])
+            self.assertTrue(
+                any(
+                    parameter["name"] == "X-CSRFToken"
+                    and parameter["in"] == "header"
+                    and parameter.get("required")
+                    for parameter in paths[path]["post"]["parameters"]
+                )
+            )

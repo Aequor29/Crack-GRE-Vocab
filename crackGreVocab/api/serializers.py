@@ -1,4 +1,4 @@
-"""Public response contracts for the foundational API."""
+"""Service identity and database readiness response contracts."""
 
 from rest_framework import serializers
 

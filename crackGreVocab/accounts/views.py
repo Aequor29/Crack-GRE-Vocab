@@ -1,9 +1,9 @@
-"""Django-session endpoints for clean-rebuild learner accounts."""
+"""Learner account and session endpoints."""
 
+from api.schema import CSRF_HEADER_PARAMETER
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import extend_schema
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.renderers import JSONRenderer
@@ -36,22 +36,15 @@ from .serializers import (
     SignUpSerializer,
 )
 
-CSRF_HEADER_PARAMETER = OpenApiParameter(
-    name="X-CSRFToken",
-    type=OpenApiTypes.STR,
-    location=OpenApiParameter.HEADER,
-    required=True,
-    description="Masked token from GET /api/auth/csrf/.",
-)
-
 
 class AccountApiView(APIView):
-    """Use JSON only and avoid cached identity/session responses."""
+    """Provide non-cacheable JSON account responses."""
 
     parser_classes = (JSONParser,)
     renderer_classes = (JSONRenderer,)
 
     def finalize_response(self, request: Request, response: Response, *args, **kwargs):
+        """Mark account responses as private to the current request."""
         finalized = super().finalize_response(request, response, *args, **kwargs)
         finalized["Cache-Control"] = "no-store"
         return finalized
@@ -142,7 +135,7 @@ class SignInView(AccountApiView):
 
 
 class PasswordResetRequestView(AccountApiView):
-    """Send recovery instructions without revealing account existence."""
+    """Accept a password recovery request."""
 
     permission_classes = (AllowAny,)
     http_method_names = ["post", "options"]
@@ -216,7 +209,7 @@ class PasswordResetConfirmView(AccountApiView):
 
 
 class SignOutView(AccountApiView):
-    """End the current session without exposing whether it existed."""
+    """End the current browser session."""
 
     permission_classes = (AllowAny,)
     http_method_names = ["post", "options"]

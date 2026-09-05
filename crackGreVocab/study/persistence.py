@@ -161,7 +161,7 @@ def refill_study_session_window(
     observed_at: datetime,
     max_active_words: int,
 ) -> None:
-    """Fill vacant working slots without changing the fixed daily Word set."""
+    """Activate pending Words in the session’s working window."""
     active_count = session.session_words.filter(
         is_in_active_window=True,
         cleared_at__isnull=True,
