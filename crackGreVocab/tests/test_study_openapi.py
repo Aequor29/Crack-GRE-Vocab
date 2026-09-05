@@ -30,3 +30,18 @@ class StudyOpenApiTests(SimpleTestCase):
             set(answer["responses"]),
             {"200", "201", "400", "403", "404", "409", "415", "503"},
         )
+        components = response.json()["components"]["schemas"]
+        create_request = components["CreateStudySessionRequest"]
+        session = components["StudySession"]
+        self.assertIn("timezone", create_request["required"])
+        self.assertNotIn("items", session["properties"])
+        self.assertTrue(
+            {
+                "cleared_word_count",
+                "current_item",
+                "next_ready_at",
+                "queue_state",
+                "remaining_word_count",
+                "word_count",
+            }.issubset(session["required"])
+        )

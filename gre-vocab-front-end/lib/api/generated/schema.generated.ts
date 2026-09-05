@@ -30,6 +30,14 @@ export type ReadinessStatusEnum = "ready" | "unavailable";
 export type RatingEnum = "remembered" | "forgot";
 
 /**
+ * * `ready` - ready
+ * * `waiting` - waiting
+ * * `completed` - completed
+ * * `abandoned` - abandoned
+ */
+export type QueueStateEnum = "ready" | "waiting" | "completed" | "abandoned";
+
+/**
  * * `due` - Due review
  * * `new` - New Word
  */
@@ -85,6 +93,11 @@ export interface CreateStudySessionRequest {
    * @max 20
    */
   new_word_target: number;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   */
+  timezone: string;
 }
 
 /** Return a masked CSRF token for one unsafe request. */
@@ -330,28 +343,33 @@ export interface StudySession {
    * * `abandoned` - Abandoned
    */
   status: StudySessionStatusEnum;
+  queue_state: QueueStateEnum;
   corpus_version: string;
+  timezone: string;
+  /** @format date-time */
+  day_ends_at: string;
   /**
    * @min 0
    * @max 32767
    */
   new_word_target: number;
-  /** Derive how many persisted items introduce new Words. */
+  /** Return how many assigned session Words introduce new material. */
   planned_new_word_count: number;
-  /** Derive total progress from the persisted session items. */
-  item_count: number;
+  /** Return how many unique Words belong to the daily session. */
+  word_count: number;
   /** @maxLength 64 */
   planner_version: string;
   /** @format date-time */
   created_at: string;
   /** @format date-time */
   ended_at?: string | null;
-  /** Return how many planned items have accepted answers. */
-  answered_count: number;
-  /** Return how many planned items still need an accepted answer. */
-  remaining_count: number;
+  /** Return Words whose accepted outcome schedules them beyond today. */
+  cleared_word_count: number;
+  /** Return unique session Words that are not yet cleared for today. */
+  remaining_word_count: number;
+  /** @format date-time */
+  next_ready_at: string | null;
   current_item: StudySessionItem | null;
-  items: StudySessionItem[];
 }
 
 export interface StudySessionItem {
@@ -359,7 +377,7 @@ export interface StudySessionItem {
   id: string;
   /**
    * @min 0
-   * @max 32767
+   * @max 2147483647
    */
   position: number;
   /**
@@ -380,6 +398,7 @@ export interface StudyValidationError {
   client_request_id?: string[];
   new_word_target?: string[];
   rating?: string[];
+  timezone?: string[];
 }
 
 export interface TodayProgress {

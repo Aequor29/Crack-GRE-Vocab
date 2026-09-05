@@ -14,6 +14,7 @@ from study.models import (
     RecallOutcome,
     StudySession,
     StudySessionItem,
+    StudySessionWord,
 )
 
 from .study_helpers import create_corpus, create_learner
@@ -190,8 +191,17 @@ class LearningProgressApiTests(TestCase):
             start=1,
         ):
             occurred_at = observed_at - timedelta(minutes=position)
+            session_word = StudySessionWord.objects.create(
+                session=session,
+                corpus_entry=entry,
+                position=position,
+                kind=StudySessionWord.Kind.NEW,
+                ready_at=occurred_at,
+                cleared_at=occurred_at,
+            )
             item = StudySessionItem.objects.create(
                 session=session,
+                session_word=session_word,
                 corpus_entry=entry,
                 position=position,
                 kind=StudySessionItem.Kind.NEW,
@@ -339,15 +349,25 @@ class LearningInsightsApiTests(TestCase):
             planner_version="test-planner",
             ended_at=occurred_at,
         )
-        item = StudySessionItem.objects.create(
+        item_kind = (
+            StudySessionItem.Kind.NEW
+            if is_initial_learning
+            else StudySessionItem.Kind.DUE
+        )
+        session_word = StudySessionWord.objects.create(
             session=session,
             corpus_entry=self.entries[entry_index],
             position=1,
-            kind=(
-                StudySessionItem.Kind.NEW
-                if is_initial_learning
-                else StudySessionItem.Kind.DUE
-            ),
+            kind=item_kind,
+            ready_at=occurred_at,
+            cleared_at=occurred_at,
+        )
+        item = StudySessionItem.objects.create(
+            session=session,
+            session_word=session_word,
+            corpus_entry=self.entries[entry_index],
+            position=1,
+            kind=item_kind,
             due_at_snapshot=(
                 None if is_initial_learning else occurred_at - timedelta(days=1)
             ),

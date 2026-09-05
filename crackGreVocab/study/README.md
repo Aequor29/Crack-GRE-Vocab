@@ -4,27 +4,35 @@ The `study` app owns learner scheduling state and backend-planned Study Sessions
 It starts from the clean Milestone 1 schema and has no prototype compatibility or
 data-migration path.
 
-## Milestone 1 planning policy
+## Milestone 1 daily queue policy
 
-`m1-due-first-v1` produces one bounded session with at most 30 items:
+`m1-daily-queue-v1` produces one fixed daily set and a bounded working window:
 
 1. Return the learner's existing active session, if one exists.
-2. Select states due at or before the server planning instant from the active
-   corpus, ordered by due instant and then stable Word identity.
-3. Fill remaining capacity with unseen Words in active-corpus order, up to the
-   requested New-Word Target. The accepted target range is 0 through 20.
-4. Persist the session, ordered items, and due-state snapshots in one database
-   transaction before returning any content.
+2. Store the next local midnight as a stable UTC completion cutoff using the
+   learner's validated IANA timezone.
+3. Assign every overdue or same-day scheduled Word from the active corpus plus
+   the available requested New-Word Target. The accepted target range is 0
+   through 20.
+4. Activate at most 30 session Words at once. Ready work takes priority and the
+   window refills without creating another learner-visible session.
+5. Persist unique Word membership separately from presentation attempts so a
+   Learning or Relearning Word can return after its timer elapses.
 
-Session totals and progress are derived from those persisted items when the
-response is serialized; the session row does not cache counters that could
-drift from its item relation.
+Review-phase work due later in the local day is ready immediately. Learning and
+Relearning timers retain their actual minute-based readiness. Among ready Words,
+the queue chooses the least recently presented Word and uses stable initial
+position to break ties.
 
-Due work consumes capacity before new material. A high due count can therefore
-reduce the planned new count below the learner's target. A Word is unseen when
-the learner has no scheduling state for its stable Word identity; an abandoned,
-unanswered new item remains eligible because session planning does not create
-scheduling state.
+Progress is the number of unique session Words whose authoritative next review
+is at or beyond the stored cutoff. Repeated attempts do not increase that count,
+and the session completes only when every assigned Word is cleared for the day.
+The API derives counts with database aggregates and returns only the issued card,
+progress, waiting state, and next-ready time; it never resends attempt history.
+
+A Word is unseen when the learner has no scheduling state for its stable Word
+identity. An abandoned, unanswered new membership remains eligible because
+session planning does not create scheduling state.
 
 The planner returns a coded conflict when there is no active corpus or no
 eligible work. The partial unique constraint on active sessions and the locked
@@ -51,8 +59,9 @@ as a review lapse.
 
 ## API
 
-- `POST /api/study/sessions/` with `{"new_word_target": number}` creates a
-  session (`201`) or resumes the active session (`200`).
+- `POST /api/study/sessions/` with
+  `{"new_word_target": number, "timezone": "Area/City"}` creates a session
+  (`201`) or resumes the active session (`200`).
 - `GET /api/study/sessions/active/` returns the current active session or `404`.
 - `POST /api/study/sessions/{session_id}/items/{item_id}/answer/` with a stable
   `client_request_id` and `remembered` or `forgot` rating records one Recall

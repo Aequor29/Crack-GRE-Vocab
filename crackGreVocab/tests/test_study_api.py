@@ -1,11 +1,15 @@
 """Authenticated Study Session creation and resume API coverage."""
 
 import json
+from datetime import UTC, datetime, time, timedelta
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, OperationalError
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
+from study.models import LearnerWordState, SchedulingPhase
 
 from .study_helpers import create_corpus, create_learner
 
@@ -30,14 +34,65 @@ class StudySessionApiTests(TestCase):
         )
         return response.json()["csrf_token"]
 
-    def post_session(self, target: int):
+    def post_session(self, target: int, *, timezone_name: str = "America/Chicago"):
         return self.client.post(
             reverse("study:session-list"),
-            data=json.dumps({"new_word_target": target}),
+            data=json.dumps(
+                {
+                    "new_word_target": target,
+                    "timezone": timezone_name,
+                }
+            ),
             content_type="application/json",
             HTTP_ORIGIN=self.origin,
             HTTP_X_CSRFTOKEN=self.csrf_token(),
         )
+
+    def test_creation_reports_fixed_daily_word_progress(self):
+        self.client.force_login(self.learner)
+
+        created = self.post_session(2)
+
+        self.assertEqual(created.status_code, 201)
+        document = created.json()
+        cutoff = datetime.fromisoformat(document["day_ends_at"])
+        local_cutoff = cutoff.astimezone(ZoneInfo("America/Chicago"))
+        self.assertEqual(document["timezone"], "America/Chicago")
+        self.assertEqual((local_cutoff.hour, local_cutoff.minute), (0, 0))
+        self.assertGreater(cutoff, datetime.fromisoformat(document["created_at"]))
+        self.assertEqual(document["queue_state"], "ready")
+        self.assertEqual(document["word_count"], 2)
+        self.assertEqual(document["cleared_word_count"], 0)
+        self.assertEqual(document["remaining_word_count"], 2)
+        self.assertIsNotNone(document["current_item"])
+        self.assertNotIn("items", document)
+
+    def test_creation_includes_review_work_due_later_today(self):
+        self.client.force_login(self.learner)
+        now = timezone.now()
+        utc_day_end = datetime.combine(
+            now.astimezone(UTC).date() + timedelta(days=1),
+            time.min,
+            UTC,
+        )
+        due_later_today = now + (utc_day_end - now) / 2
+        LearnerWordState.objects.create(
+            learner=self.learner,
+            word=self.entries[0].word,
+            phase=SchedulingPhase.REVIEW,
+            review_count=2,
+            last_reviewed_at=now - timedelta(days=1),
+            next_due_at=due_later_today,
+            scheduler_version="test-scheduler-v1",
+            scheduler_state={"source": "daily-queue-test"},
+        )
+
+        created = self.post_session(0, timezone_name="UTC")
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()["word_count"], 1)
+        self.assertEqual(created.json()["current_item"]["term"], "abate")
+        self.assertEqual(created.json()["current_item"]["kind"], "due")
 
     def test_authenticated_creation_and_later_reads_return_stable_plan(self):
         self.client.force_login(self.learner)
@@ -52,12 +107,9 @@ class StudySessionApiTests(TestCase):
         self.assertEqual(created.json(), resumed.json())
         self.assertEqual(created.json(), active.json())
         self.assertEqual(created.json()["corpus_version"], self.corpus.version)
+        self.assertEqual(created.json()["current_item"]["term"], "abate")
         self.assertEqual(
-            [item["term"] for item in created.json()["items"]],
-            ["abate", "lucid"],
-        )
-        self.assertEqual(
-            created.json()["items"][0]["senses"][0]["definition"],
+            created.json()["current_item"]["senses"][0]["definition"],
             "Definition for abate.",
         )
 
@@ -74,10 +126,14 @@ class StudySessionApiTests(TestCase):
             HTTP_ORIGIN=self.origin,
         )
         invalid_target = self.post_session(21)
+        invalid_timezone = self.post_session(1, timezone_name="Mars/Olympus")
         self.assertEqual(missing_csrf.status_code, 403)
         self.assertEqual(missing_csrf.json()["code"], "csrf_failed")
         self.assertEqual(invalid_target.status_code, 400)
         self.assertEqual(invalid_target.json()["code"], "validation_error")
+        self.assertEqual(invalid_timezone.status_code, 400)
+        self.assertEqual(invalid_timezone.json()["code"], "validation_error")
+        self.assertIn("timezone", invalid_timezone.json())
 
         missing_session = self.client.get(reverse("study:active-session"))
         self.assertEqual(missing_session.status_code, 404)
@@ -113,7 +169,7 @@ class StudySessionApiTests(TestCase):
         )
 
         with patch(
-            "study.views.get_active_study_session",
+            "study.views.resume_active_study_session",
             side_effect=OperationalError("connection interrupted"),
         ):
             restore_retryable = self.client.get(reverse("study:active-session"))

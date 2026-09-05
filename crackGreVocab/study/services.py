@@ -1,8 +1,9 @@
 """Transactional business orchestration for backend-planned Study Sessions."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, time, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from accounts.models import LearnerAccount
 from django.db import transaction
@@ -23,12 +24,15 @@ from .persistence import (
     lock_session_item,
     lock_word_state,
     mark_study_session_completed,
+    persist_current_session_item,
     persist_recall_answer_transition,
+    persist_session_word_after_answer,
     persist_study_session_plan,
+    refill_study_session_window,
 )
 from .policy import (
+    MAX_ACTIVE_STUDY_WORDS,
     MAX_NEW_WORDS_PER_SESSION,
-    MAX_STUDY_SESSION_ITEMS,
     PLANNER_VERSION,
 )
 from .scheduling import SchedulingStateError, schedule_recall
@@ -39,7 +43,9 @@ from .selectors import (
     get_recall_answer_by_request_id,
     get_recall_answer_for_item,
     get_study_session,
+    has_uncleared_session_words,
     select_due_study_items,
+    select_ready_session_item,
     select_unseen_corpus_entries,
 )
 
@@ -112,26 +118,32 @@ def _require_active_corpus() -> CorpusVersion:
     return corpus
 
 
+def _daily_cutoff(*, planned_at: datetime, timezone_name: str) -> datetime:
+    learner_timezone = ZoneInfo(timezone_name)
+    local_date = planned_at.astimezone(learner_timezone).date()
+    return datetime.combine(
+        local_date + timedelta(days=1),
+        time.min,
+        learner_timezone,
+    ).astimezone(UTC)
+
+
 def _select_due_and_new_items(
     *,
     learner: LearnerAccount,
     corpus: CorpusVersion,
     new_word_target: int,
-    planned_at: datetime,
+    day_ends_at: datetime,
 ) -> tuple[tuple[DueItem, ...], tuple[CorpusEntry, ...]]:
     due_items = select_due_study_items(
         learner=learner,
         corpus=corpus,
-        planned_at=planned_at,
-        limit=MAX_STUDY_SESSION_ITEMS,
+        due_before=day_ends_at,
     )
     new_entries = select_unseen_corpus_entries(
         learner=learner,
         corpus=corpus,
-        limit=min(
-            new_word_target,
-            MAX_STUDY_SESSION_ITEMS - len(due_items),
-        ),
+        limit=new_word_target,
     )
     return due_items, new_entries
 
@@ -194,6 +206,25 @@ def _find_exact_recall_replay(
     )
 
 
+def _issue_next_ready_item(
+    *,
+    session: StudySession,
+    observed_at: datetime,
+) -> StudySessionItem | None:
+    """Issue one ready attempt when the session does not already have one."""
+    if session.current_item_id is not None:
+        return session.current_item
+    refill_study_session_window(
+        session=session,
+        observed_at=observed_at,
+        max_active_words=MAX_ACTIVE_STUDY_WORDS,
+    )
+    item = select_ready_session_item(session=session, observed_at=observed_at)
+    if item is not None:
+        persist_current_session_item(session=session, item=item)
+    return item
+
+
 @transaction.atomic
 def record_recall_answer(
     *,
@@ -237,6 +268,7 @@ def record_recall_answer(
             "This Study Session item already has an accepted answer.",
         )
 
+    occurred_at = occurred_at or timezone.now()
     current_item = lock_current_session_item(session=session)
     if current_item is None:
         raise StudyStateInvariantError(
@@ -251,7 +283,6 @@ def record_recall_answer(
 
     state = lock_word_state(learner=locked_learner, item=item)
     _validate_scheduling_snapshot(item=item, state=state)
-    occurred_at = occurred_at or timezone.now()
     try:
         transition = schedule_recall(
             word_id=item.corpus_entry.word_id,
@@ -274,8 +305,22 @@ def record_recall_answer(
         occurred_at=occurred_at,
         transition=transition,
     )
-    if lock_current_session_item(session=session) is None:
+    persist_current_session_item(session=session, item=None)
+    persist_session_word_after_answer(
+        session=session,
+        item=item,
+        occurred_at=occurred_at,
+        transition=transition,
+    )
+    refill_study_session_window(
+        session=session,
+        observed_at=occurred_at,
+        max_active_words=MAX_ACTIVE_STUDY_WORDS,
+    )
+    if not has_uncleared_session_words(session=session):
         mark_study_session_completed(session=session, ended_at=occurred_at)
+    else:
+        _issue_next_ready_item(session=session, observed_at=occurred_at)
 
     return RecordedRecall(
         answer=answer,
@@ -290,6 +335,7 @@ def plan_study_session(
     *,
     learner: LearnerAccount,
     new_word_target: int,
+    timezone_name: str = "UTC",
     planned_at: datetime | None = None,
 ) -> PlannedSession:
     """Resume an active session or atomically persist a deterministic new plan."""
@@ -298,14 +344,19 @@ def plan_study_session(
     locked_learner = lock_learner(learner_id=learner.pk)
     active = get_active_study_session(learner=locked_learner)
     if active is not None:
+        _issue_next_ready_item(session=active, observed_at=planned_at)
         return PlannedSession(session=active, created=False)
 
     corpus = _require_active_corpus()
+    day_ends_at = _daily_cutoff(
+        planned_at=planned_at,
+        timezone_name=timezone_name,
+    )
     due_items, new_entries = _select_due_and_new_items(
         learner=locked_learner,
         corpus=corpus,
         new_word_target=new_word_target,
-        planned_at=planned_at,
+        day_ends_at=day_ends_at,
     )
     if not due_items and not new_entries:
         raise StudyPlanningUnavailable(
@@ -316,12 +367,33 @@ def plan_study_session(
     session = persist_study_session_plan(
         learner=locked_learner,
         corpus=corpus,
+        timezone_name=timezone_name,
+        day_ends_at=day_ends_at,
+        planned_at=planned_at,
         new_word_target=new_word_target,
+        max_active_words=MAX_ACTIVE_STUDY_WORDS,
         due_items=due_items,
         new_entries=new_entries,
         planner_version=PLANNER_VERSION,
     )
+    _issue_next_ready_item(session=session, observed_at=planned_at)
     return PlannedSession(
         session=get_study_session(session_id=session.pk),
         created=True,
     )
+
+
+@transaction.atomic
+def resume_active_study_session(
+    *,
+    learner: LearnerAccount,
+    observed_at: datetime | None = None,
+) -> StudySession | None:
+    """Resume the learner's active session and issue a ready card if idle."""
+    observed_at = observed_at or timezone.now()
+    locked_learner = lock_learner(learner_id=learner.pk)
+    session = get_active_study_session(learner=locked_learner)
+    if session is None:
+        return None
+    _issue_next_ready_item(session=session, observed_at=observed_at)
+    return get_study_session(session_id=session.pk)
