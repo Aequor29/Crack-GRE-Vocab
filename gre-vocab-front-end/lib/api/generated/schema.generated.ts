@@ -270,7 +270,7 @@ export interface SignInRequest {
   password: string;
 }
 
-/** Validate and create a clean-rebuild learner account. */
+/** Validate signup details and create a learner account. */
 export interface SignUpRequest {
   /**
    * @format email
