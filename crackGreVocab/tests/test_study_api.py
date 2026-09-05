@@ -107,10 +107,11 @@ class StudySessionApiTests(TestCase):
         self.assertEqual(created.json(), resumed.json())
         self.assertEqual(created.json(), active.json())
         self.assertEqual(created.json()["corpus_version"], self.corpus.version)
-        self.assertEqual(created.json()["current_item"]["term"], "abate")
+        term = created.json()["current_item"]["term"]
+        self.assertIn(term, ("abate", "lucid"))
         self.assertEqual(
             created.json()["current_item"]["senses"][0]["definition"],
-            "Definition for abate.",
+            f"Definition for {term}.",
         )
 
     def test_auth_csrf_validation_and_empty_plan_fail_safely(self):

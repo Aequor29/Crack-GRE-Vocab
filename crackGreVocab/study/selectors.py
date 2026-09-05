@@ -8,6 +8,8 @@ from django.db.models import Count, F, Min, Q, QuerySet
 from vocabulary.models import CorpusEntry, CorpusVersion
 
 from .models import LearnerWordState, RecallAnswer, StudySession, StudySessionItem
+from .new_words import select_new_word_ids
+from .policy import PLANNER_VERSION
 
 type DueItem = tuple[LearnerWordState, CorpusEntry]
 
@@ -131,10 +133,27 @@ def select_unseen_corpus_entries(
     corpus: CorpusVersion,
     limit: int,
 ) -> tuple[CorpusEntry, ...]:
-    """Select ordered corpus entries the learner has never studied."""
-    return tuple(
+    """Select unseen entries in stable learner-deck order, loading only winners."""
+    if limit <= 0:
+        return ()
+    candidates = (
         CorpusEntry.objects.filter(corpus=corpus)
         .exclude(word__learner_states__learner=learner)
-        .select_related("word")
-        .order_by("position", "id")[:limit]
+        .order_by()
+        .values_list("word_id", flat=True)
+        .iterator(chunk_size=512)
     )
+    selected = select_new_word_ids(
+        candidates,
+        learner_id=learner.pk,
+        corpus_version=corpus.version,
+        planner_version=PLANNER_VERSION,
+        limit=limit,
+    )
+    entries = {
+        entry.word_id: entry
+        for entry in CorpusEntry.objects.filter(
+            corpus=corpus, word_id__in=selected
+        ).select_related("word")
+    }
+    return tuple(entries[word_id] for word_id in selected)

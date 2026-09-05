@@ -57,13 +57,14 @@ class StudySessionPlanningTests(TestCase):
         self.assertEqual(len(items), 4)
         self.assertEqual(sum(item.kind == "new" for item in items), 2)
         self.assertEqual(
-            [(item.kind, item.corpus_entry.term) for item in items],
+            [(item.kind, item.corpus_entry.term) for item in items[:2]],
             [
                 ("due", "lucid"),
                 ("due", "abate"),
-                ("new", "pragmatic"),
-                ("new", "zeal"),
             ],
+        )
+        self.assertCountEqual(
+            [item.corpus_entry.term for item in items[2:]], ["pragmatic", "zeal"]
         )
         first_due = items[0]
         self.assertEqual(first_due.scheduler_version, "fsrs-adapter-v1")
