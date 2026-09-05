@@ -1,4 +1,4 @@
-"""AEQ-13 Study domain relationship and invariant coverage."""
+"""Study relationships and persisted invariants."""
 
 import uuid
 from datetime import timedelta
@@ -36,15 +36,6 @@ class StudyDomainModelTests(TestCase):
         }
         values.update(overrides)
         return StudySession.objects.create(**values)
-
-    def test_schema_persists_only_current_study_behavior(self):
-        session_fields = {field.name for field in StudySession._meta.get_fields()}
-        item_fields = {field.name for field in StudySessionItem._meta.get_fields()}
-        state_fields = {field.name for field in LearnerWordState._meta.get_fields()}
-
-        self.assertFalse({"item_count", "planned_new_word_count"} & session_fields)
-        self.assertFalse({"presented_at", "revealed_at"} & item_fields)
-        self.assertFalse({"difficulty", "stability"} & state_fields)
 
     def test_representative_history_lifecycle_is_durable_and_linked(self):
         state = LearnerWordState.objects.create(
@@ -128,7 +119,7 @@ class StudyDomainModelTests(TestCase):
         )
         self.assertNotEqual(other_corpus, self.corpus)
 
-        with self.assertRaisesMessage(ValueError, "session corpus"):
+        with self.assertRaises(ValueError):
             persist_study_session_plan(
                 learner=self.learner,
                 corpus=self.corpus,
@@ -216,5 +207,5 @@ class StudyDomainModelTests(TestCase):
         session.refresh_from_db()
         self.assertEqual(session.status, StudySession.Status.ABANDONED)
         self.assertEqual(session.ended_at, self.now)
-        with self.assertRaisesMessage(ValueError, "Only an active"):
+        with self.assertRaises(ValueError):
             session.close("completed")

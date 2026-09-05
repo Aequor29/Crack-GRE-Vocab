@@ -1,4 +1,4 @@
-"""Routes for clean-rebuild learner account sessions."""
+"""Learner account and session routes."""
 
 from django.urls import path
 

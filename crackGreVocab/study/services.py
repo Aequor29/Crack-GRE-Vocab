@@ -45,7 +45,7 @@ from .selectors import (
     get_study_session,
     has_uncleared_session_words,
     select_due_study_items,
-    select_ready_session_item,
+    select_next_session_item,
     select_unseen_corpus_entries,
 )
 
@@ -206,12 +206,12 @@ def _find_exact_recall_replay(
     )
 
 
-def _issue_next_ready_item(
+def _issue_next_session_item(
     *,
     session: StudySession,
     observed_at: datetime,
 ) -> StudySessionItem | None:
-    """Issue one ready attempt when the session does not already have one."""
+    """Issue the next unfinished Word when no card is already displayed."""
     if session.current_item_id is not None:
         return session.current_item
     refill_study_session_window(
@@ -219,7 +219,7 @@ def _issue_next_ready_item(
         observed_at=observed_at,
         max_active_words=MAX_ACTIVE_STUDY_WORDS,
     )
-    item = select_ready_session_item(session=session, observed_at=observed_at)
+    item = select_next_session_item(session=session)
     if item is not None:
         persist_current_session_item(session=session, item=item)
     return item
@@ -320,7 +320,7 @@ def record_recall_answer(
     if not has_uncleared_session_words(session=session):
         mark_study_session_completed(session=session, ended_at=occurred_at)
     else:
-        _issue_next_ready_item(session=session, observed_at=occurred_at)
+        _issue_next_session_item(session=session, observed_at=occurred_at)
 
     return RecordedRecall(
         answer=answer,
@@ -344,7 +344,7 @@ def plan_study_session(
     locked_learner = lock_learner(learner_id=learner.pk)
     active = get_active_study_session(learner=locked_learner)
     if active is not None:
-        _issue_next_ready_item(session=active, observed_at=planned_at)
+        _issue_next_session_item(session=active, observed_at=planned_at)
         return PlannedSession(session=active, created=False)
 
     corpus = _require_active_corpus()
@@ -376,7 +376,7 @@ def plan_study_session(
         new_entries=new_entries,
         planner_version=PLANNER_VERSION,
     )
-    _issue_next_ready_item(session=session, observed_at=planned_at)
+    _issue_next_session_item(session=session, observed_at=planned_at)
     return PlannedSession(
         session=get_study_session(session_id=session.pk),
         created=True,
@@ -389,11 +389,11 @@ def resume_active_study_session(
     learner: LearnerAccount,
     observed_at: datetime | None = None,
 ) -> StudySession | None:
-    """Resume the learner's active session and issue a ready card if idle."""
+    """Resume the learner's active session and issue its next card if idle."""
     observed_at = observed_at or timezone.now()
     locked_learner = lock_learner(learner_id=learner.pk)
     session = get_active_study_session(learner=locked_learner)
     if session is None:
         return None
-    _issue_next_ready_item(session=session, observed_at=observed_at)
+    _issue_next_session_item(session=session, observed_at=observed_at)
     return get_study_session(session_id=session.pk)

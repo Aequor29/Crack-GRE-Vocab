@@ -15,6 +15,7 @@ LearnerAccount = get_user_model()
 
 
 def create_learner(*, email: str = "learner@example.com"):
+    """Create a learner with password authentication."""
     return LearnerAccount.objects.create_user(
         email=email,
         display_name="Learner",
@@ -29,6 +30,7 @@ def create_corpus(
     is_active: bool = True,
     words_by_term: Mapping[str, VocabularyWord] | None = None,
 ) -> tuple[CorpusVersion, list[CorpusEntry]]:
+    """Create a corpus with one definition and example for each term."""
     digest = hashlib.sha256(version.encode()).hexdigest()
     corpus = CorpusVersion.objects.create(
         version=version,

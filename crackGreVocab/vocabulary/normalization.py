@@ -23,7 +23,7 @@ def collapse_whitespace(value: str) -> str:
 
 
 def canonical_term(value: str) -> tuple[str, str]:
-    """Return display and identity forms without removing accents."""
+    """Return normalized display and identity forms of a term."""
     term = collapse_whitespace(value)
     if not term:
         raise ValueError("word must not be empty")

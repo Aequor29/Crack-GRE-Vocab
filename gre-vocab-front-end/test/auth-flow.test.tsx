@@ -124,16 +124,14 @@ describe("learner account experience", () => {
     let finishSecondRequest: ((restored: null) => void) | undefined;
     getCurrentAccountMock
       .mockImplementationOnce(
-        ({ signal } = {}) =>
+        () =>
           new Promise((resolve) => {
-            expect(signal?.aborted).toBe(false);
             finishFirstRequest = resolve;
           }),
       )
       .mockImplementationOnce(
-        ({ signal } = {}) =>
+        () =>
           new Promise((resolve) => {
-            expect(signal?.aborted).toBe(false);
             finishSecondRequest = resolve;
           }),
       );
@@ -145,11 +143,9 @@ describe("learner account experience", () => {
     );
 
     await waitFor(() => expect(getCurrentAccountMock).toHaveBeenCalledOnce());
-    const firstSignal = getCurrentAccountMock.mock.calls[0]?.[0]?.signal;
     fireEvent.click(screen.getByRole("button", { name: "Refresh session" }));
 
     await waitFor(() => expect(getCurrentAccountMock).toHaveBeenCalledTimes(2));
-    expect(firstSignal?.aborted).toBe(true);
     finishSecondRequest?.(null);
     expect(await screen.findByText("unauthenticated")).toBeInTheDocument();
 

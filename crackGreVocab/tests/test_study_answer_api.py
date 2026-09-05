@@ -103,11 +103,10 @@ class RecallAnswerApiTests(TestCase):
         self.assertEqual(created.json()["session"]["cleared_word_count"], 1)
         self.assertEqual(created.json()["session"]["remaining_word_count"], 0)
         self.assertIsNone(created.json()["session"]["current_item"])
-        self.assertNotIn("items", created.json()["session"])
         self.assertEqual(RecallAnswer.objects.count(), 2)
         self.assertEqual(RecallOutcome.objects.count(), 2)
 
-    def test_new_words_finish_the_first_round_before_waiting_for_repeats(self):
+    def test_new_words_finish_the_first_round_then_repeat_without_waiting(self):
         started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
         session = plan_study_session(
             learner=self.learner,
@@ -146,17 +145,19 @@ class RecallAnswerApiTests(TestCase):
         )
         self.assertEqual(second.status_code, 201)
         self.assertEqual(second.json()["session"]["status"], "active")
-        self.assertEqual(second.json()["session"]["queue_state"], "waiting")
-        self.assertIsNone(second.json()["session"]["current_item"])
+        self.assertEqual(second.json()["session"]["queue_state"], "ready")
+        self.assertEqual(
+            second.json()["session"]["current_item"]["word_id"],
+            str(first_item.corpus_entry.word_id),
+        )
         self.assertEqual(second.json()["session"]["word_count"], 2)
         self.assertEqual(second.json()["session"]["cleared_word_count"], 0)
         self.assertEqual(second.json()["session"]["remaining_word_count"], 2)
-        self.assertEqual(
-            second.json()["session"]["next_ready_at"],
-            "2026-08-30T15:10:00Z",
+        self.assertGreater(
+            second.json()["outcome"]["next_due_at"], "2026-08-30T15:01:00Z"
         )
 
-    def test_issued_card_remains_current_when_an_earlier_attempt_becomes_ready(self):
+    def test_issued_card_remains_current_as_scheduling_timers_elapse(self):
         started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
         session = plan_study_session(
             learner=self.learner,
@@ -195,7 +196,7 @@ class RecallAnswerApiTests(TestCase):
             resumed = self.client.get(reverse("study:active-session"))
         issued_item_id = resumed.json()["current_item"]["id"]
         self.assertEqual(
-            resumed.json()["current_item"]["term"], second_item.corpus_entry.term
+            resumed.json()["current_item"]["term"], first_item.corpus_entry.term
         )
 
         with patch(
@@ -213,7 +214,7 @@ class RecallAnswerApiTests(TestCase):
 
         self.assertEqual(accepted.status_code, 201)
 
-    def test_ready_repeats_use_least_recently_presented_order(self):
+    def test_forgotten_words_rotate_behind_the_other_unfinished_words(self):
         started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
         session = plan_study_session(
             learner=self.learner,
@@ -249,10 +250,14 @@ class RecallAnswerApiTests(TestCase):
             return_value=started_at + timedelta(minutes=2),
         ):
             resumed = self.client.get(reverse("study:active-session"))
-            second_repeat_id = resumed.json()["current_item"]["id"]
+            first_repeat_id = resumed.json()["current_item"]["id"]
+            self.assertEqual(
+                resumed.json()["current_item"]["word_id"],
+                str(first_item.corpus_entry.word_id),
+            )
             self.post_answer(
                 session,
-                SimpleNamespace(pk=second_repeat_id),
+                SimpleNamespace(pk=first_repeat_id),
                 {
                     "client_request_id": str(uuid.uuid4()),
                     "rating": "forgot",
@@ -266,8 +271,49 @@ class RecallAnswerApiTests(TestCase):
             fair_next = self.client.get(reverse("study:active-session"))
 
         self.assertEqual(
-            fair_next.json()["current_item"]["term"], first_item.corpus_entry.term
+            fair_next.json()["current_item"]["term"], second_item.corpus_entry.term
         )
+
+    def test_twenty_word_session_can_finish_in_one_continuous_sitting(self):
+        self.corpus.is_active = False
+        self.corpus.save(update_fields=("is_active",))
+        create_corpus(
+            tuple(f"word-{index:02d}" for index in range(20)),
+            version="continuous-session",
+        )
+        started_at = datetime(2026, 8, 30, 15, tzinfo=UTC)
+        session = plan_study_session(
+            learner=self.learner,
+            new_word_target=20,
+            timezone_name="America/Chicago",
+            planned_at=started_at,
+        ).session
+        current = session.current_item
+        presented = []
+        for index in range(40):
+            presented.append(str(current.corpus_entry.word_id))
+            with patch(
+                "study.services.timezone.now",
+                return_value=started_at + timedelta(seconds=index + 1),
+            ):
+                response = self.post_answer(
+                    session,
+                    current,
+                    {"client_request_id": str(uuid.uuid4()), "rating": "remembered"},
+                )
+            self.assertEqual(response.status_code, 201)
+            progress = response.json()["session"]
+            self.assertEqual(progress["word_count"], 20)
+            self.assertEqual(progress["cleared_word_count"], max(0, index - 19))
+            if index < 39:
+                self.assertEqual(progress["status"], "active")
+                self.assertIsNotNone(progress["current_item"])
+                current = session.items.get(pk=progress["current_item"]["id"])
+        self.assertEqual(len(set(presented[:20])), 20)
+        self.assertEqual(presented[:20], presented[20:])
+        self.assertEqual(progress["status"], "completed")
+        self.assertEqual(progress["remaining_word_count"], 0)
+        self.assertIsNone(progress["current_item"])
 
     def test_validation_csrf_order_and_ownership_fail_safely(self):
         session = plan_study_session(

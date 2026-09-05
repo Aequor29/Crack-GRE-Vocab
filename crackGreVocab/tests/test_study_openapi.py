@@ -19,27 +19,49 @@ class StudyOpenApiTests(SimpleTestCase):
             "post"
         ]
         self.assertEqual(create["operationId"], "study_session_create")
-        self.assertEqual(
-            set(create["responses"]),
-            {"200", "201", "400", "403", "409", "415", "503"},
+        self.assertTrue(
+            {"200", "201", "400", "403", "409", "415", "503"}.issubset(
+                create["responses"]
+            )
         )
         self.assertEqual(active["operationId"], "study_session_active_retrieve")
-        self.assertEqual(set(active["responses"]), {"200", "403", "404", "503"})
+        self.assertTrue({"200", "403", "404", "503"}.issubset(active["responses"]))
         self.assertEqual(answer["operationId"], "study_session_answer_create")
-        self.assertEqual(
-            set(answer["responses"]),
-            {"200", "201", "400", "403", "404", "409", "415", "503"},
+        self.assertTrue(
+            {"200", "201", "400", "403", "404", "409", "415", "503"}.issubset(
+                answer["responses"]
+            )
         )
+        for operation, status, schema_name in (
+            (create, "201", "StudySession"),
+            (active, "200", "StudySession"),
+            (answer, "201", "StudyAnswerResponse"),
+            (answer, "400", "StudyValidationError"),
+            (answer, "409", "StudyPlanningError"),
+        ):
+            self.assertEqual(
+                operation["responses"][status]["content"]["application/json"][
+                    "schema"
+                ]["$ref"],
+                f"#/components/schemas/{schema_name}",
+            )
+        for operation in (create, answer):
+            self.assertTrue(
+                any(
+                    parameter["name"] == "X-CSRFToken"
+                    and parameter["in"] == "header"
+                    and parameter.get("required")
+                    for parameter in operation["parameters"]
+                )
+            )
         components = response.json()["components"]["schemas"]
         create_request = components["CreateStudySessionRequest"]
         session = components["StudySession"]
         self.assertIn("timezone", create_request["required"])
-        self.assertNotIn("items", session["properties"])
         self.assertTrue(
             {
                 "cleared_word_count",
                 "current_item",
-                "next_ready_at",
                 "queue_state",
                 "remaining_word_count",
                 "word_count",

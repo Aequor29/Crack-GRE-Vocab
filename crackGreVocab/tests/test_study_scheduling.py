@@ -1,4 +1,4 @@
-"""Deterministic Milestone 1 FSRS adapter coverage."""
+"""Recall grades and scheduling transitions."""
 
 from datetime import UTC, datetime, timedelta
 from unittest import TestCase

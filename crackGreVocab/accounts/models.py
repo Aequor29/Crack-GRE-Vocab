@@ -10,7 +10,7 @@ from .managers import LearnerAccountManager
 
 
 class LearnerAccount(AbstractBaseUser, PermissionsMixin):
-    """A learner identified by email rather than a public username."""
+    """A learner account identified by email."""
 
     email = models.EmailField("email address", unique=True)
     display_name = models.CharField(max_length=80)
@@ -54,7 +54,7 @@ class LearnerAccount(AbstractBaseUser, PermissionsMixin):
 
 
 class GoogleIdentity(models.Model):
-    """Bind one stable Google subject to one clean-rebuild learner account."""
+    """Associate a Google identity with a learner account."""
 
     account = models.OneToOneField(
         LearnerAccount,

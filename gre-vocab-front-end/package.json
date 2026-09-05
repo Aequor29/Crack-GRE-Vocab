@@ -17,6 +17,7 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "verify": "npm run api:check && npm run lint && npm test && npm run typecheck && npm run build -- --webpack",
     "test:watch": "vitest"
   },
   "dependencies": {

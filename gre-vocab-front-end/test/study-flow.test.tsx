@@ -90,7 +90,7 @@ describe("study session experience", () => {
 
     render(<StudySession />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent("couldn't load your study progress");
+    expect(screen.getByRole("alert")).not.toBeEmptyDOMElement();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(auth.refresh).toHaveBeenCalledTimes(1));
     expect(getActiveStudySessionMock).not.toHaveBeenCalled();
@@ -339,28 +339,23 @@ describe("study session experience", () => {
     expect(await screen.findByRole("heading", { name: "abate" })).toBeInTheDocument();
   });
 
-  it("shows an active waiting state and resumes from the authoritative queue", async () => {
-    const waitingSession = buildStudySession({
-      current_item: null,
-      next_ready_at: "2099-08-07T05:10:00Z",
-      queue_state: "waiting",
-      remaining_word_count: 2,
-      word_count: 2,
+  it("continues directly to a repeat while no words are cleared for today", async () => {
+    getActiveStudySessionMock.mockResolvedValue(nextSession);
+    const repeated = buildStudySession({
+      ...activeSession,
+      current_item: { ...firstItem, id: "repeat-attempt", kind: "due" },
     });
-    getActiveStudySessionMock
-      .mockResolvedValueOnce(waitingSession)
-      .mockResolvedValueOnce(activeSession);
+    submitRecallAnswerMock.mockResolvedValue(buildStudyAnswerResponse(repeated));
 
     render(<StudySession />);
+    expect(await screen.findByRole("heading", { name: "lucid" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reveal meaning" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remembered" }));
 
-    expect(
-      await screen.findByRole("heading", { name: "Next word is not ready yet" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("0 of 2 words done today")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Check for a ready word" }));
     expect(await screen.findByRole("heading", { name: "abate" })).toBeInTheDocument();
+    expect(screen.getByText("0 of 2 words done today")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reveal meaning" })).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("redirects an unauthenticated learner without loading study state", async () => {

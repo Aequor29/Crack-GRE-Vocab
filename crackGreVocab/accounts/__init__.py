@@ -1,1 +1,1 @@
-"""Learner account domain for the clean rebuild."""
+"""Learner accounts and authentication."""

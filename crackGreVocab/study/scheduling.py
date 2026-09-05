@@ -102,7 +102,7 @@ def schedule_recall(
     previous_state: Mapping[str, object] | None,
     previous_scheduler_version: str | None,
 ) -> SchedulerTransition:
-    """Return one deterministic transition without reading or writing the database."""
+    """Calculate the next scheduling state for a recall grade."""
     try:
         fsrs_rating = _RATINGS[rating]
     except KeyError as exc:

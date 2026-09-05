@@ -1,4 +1,4 @@
-"""Strict audit of the retained Milestone 1 GRE word list."""
+"""Validate and audit the GRE vocabulary source list."""
 
 import csv
 import io

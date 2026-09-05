@@ -1,4 +1,4 @@
-"""Focused model and API coverage for clean-rebuild learner accounts."""
+"""Learner account validation and authentication behavior."""
 
 import json
 

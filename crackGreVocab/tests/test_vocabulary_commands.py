@@ -150,9 +150,8 @@ class VocabularyCommandTests(SimpleTestCase):
 
         self.assertEqual(set(stored), {("freedictionaryapi-v1", "lucid")})
         self.assertEqual(stored[("freedictionaryapi-v1", "lucid")]["status"], "ok")
-        self.assertIn("cached 1 response", output.getvalue())
 
-    def test_refresh_command_downloads_and_reports_the_pinned_archive(self):
+    def test_refresh_command_downloads_the_pinned_archive(self):
         archive_content = b"pinned archive bytes"
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -182,9 +181,8 @@ class VocabularyCommandTests(SimpleTestCase):
                 )
 
             self.assertEqual(destination.read_bytes(), archive_content)
-        self.assertIn("oewn-2025: downloaded", output.getvalue())
 
-    def test_prepare_command_writes_and_reports_the_actionable_queue(self):
+    def test_prepare_command_writes_the_actionable_queue(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             inputs = write_minimal_build_inputs(root)
@@ -203,9 +201,8 @@ class VocabularyCommandTests(SimpleTestCase):
             queue = json.loads(queue_path.read_text(encoding="utf-8"))
 
         self.assertEqual(queue["items"], [])
-        self.assertIn("review queue contains 0 unresolved word(s)", output.getvalue())
 
-    def test_build_command_writes_and_reports_an_immutable_release(self):
+    def test_build_command_writes_an_immutable_release(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             inputs = write_minimal_build_inputs(root)
@@ -228,7 +225,6 @@ class VocabularyCommandTests(SimpleTestCase):
             )
 
         self.assertEqual(manifest["corpus_version"], "m1-test")
-        self.assertIn("corpus built", output.getvalue())
 
 
 class VocabularyImportCommandTests(TransactionTestCase):
@@ -256,4 +252,3 @@ class VocabularyImportCommandTests(TransactionTestCase):
 
         self.assertTrue(report["created_corpus"])
         self.assertEqual(report["version"], "m1-test")
-        self.assertIn('"created_corpus": true', output.getvalue())

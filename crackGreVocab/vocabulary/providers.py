@@ -744,7 +744,7 @@ def parse_dictionary_api_dev(
     record: dict[str, Any],
     config: ProviderConfig,
 ) -> tuple[SenseCandidate, ...]:
-    """Parse the tertiary provider without crossing definition objects."""
+    """Extract paired definitions and examples from the tertiary provider."""
     normalized_term = _response_normalized_term(
         record,
         provider="DictionaryAPI.dev",

@@ -1,6 +1,5 @@
 """JSON contracts for backend-planned Study Sessions."""
 
-from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from drf_spectacular.utils import extend_schema_field
@@ -75,7 +74,6 @@ class StudySessionSerializer(serializers.ModelSerializer):
     cleared_word_count = serializers.SerializerMethodField()
     remaining_word_count = serializers.SerializerMethodField()
     queue_state = serializers.SerializerMethodField()
-    next_ready_at = serializers.SerializerMethodField()
     current_item = serializers.SerializerMethodField()
 
     def get_planned_new_word_count(self, session: StudySession) -> int:
@@ -95,20 +93,13 @@ class StudySessionSerializer(serializers.ModelSerializer):
         return self.get_word_count(session) - self.get_cleared_word_count(session)
 
     @extend_schema_field(
-        serializers.ChoiceField(choices=("ready", "waiting", "completed", "abandoned"))
+        serializers.ChoiceField(choices=("ready", "completed", "abandoned"))
     )
     def get_queue_state(self, session: StudySession) -> str:
         """Return the learner-visible availability state of the session queue."""
         if session.status != StudySession.Status.ACTIVE:
             return session.status
-        return "ready" if session.current_item_id is not None else "waiting"
-
-    @extend_schema_field(serializers.DateTimeField(allow_null=True))
-    def get_next_ready_at(self, session: StudySession) -> datetime | None:
-        """Return the next unfinished Word readiness time while waiting."""
-        if self.get_queue_state(session) != "waiting":
-            return None
-        return session.next_ready_at_value
+        return "ready"
 
     @extend_schema_field(StudySessionItemSerializer(allow_null=True))
     def get_current_item(self, session: StudySession) -> dict[str, object] | None:
@@ -134,7 +125,6 @@ class StudySessionSerializer(serializers.ModelSerializer):
             "ended_at",
             "cleared_word_count",
             "remaining_word_count",
-            "next_ready_at",
             "current_item",
         )
 

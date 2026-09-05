@@ -13,7 +13,7 @@ LearnerAccount = get_user_model()
 
 
 def normalize_email_identity(value: str) -> str:
-    """Normalize an email without allowing case folding to exceed storage."""
+    """Normalize and validate a learner email address."""
     try:
         return LearnerAccountManager.normalize_identity(value)
     except ValueError as exc:
@@ -30,7 +30,7 @@ class LearnerAccountSerializer(serializers.ModelSerializer):
 
 
 class SignUpSerializer(serializers.Serializer):
-    """Validate and create a clean-rebuild learner account."""
+    """Validate signup details and create a learner account."""
 
     email = serializers.EmailField(max_length=EMAIL_MAX_LENGTH)
     display_name = serializers.CharField(max_length=80, trim_whitespace=True)

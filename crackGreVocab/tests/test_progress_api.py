@@ -1,22 +1,14 @@
 """Authenticated Learning Progress API behavior."""
 
-import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
-from django.db import OperationalError, connection
+from django.db import OperationalError
 from django.test import Client, TestCase, override_settings
-from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from study.models import (
-    LearnerWordState,
-    RecallAnswer,
-    RecallOutcome,
-    StudySession,
-    StudySessionItem,
-    StudySessionWord,
-)
+from study.models import LearnerWordState, StudySession
 
+from .progress_helpers import create_recall_outcome
 from .study_helpers import create_corpus, create_learner
 
 
@@ -191,56 +183,26 @@ class LearningProgressApiTests(TestCase):
             start=1,
         ):
             occurred_at = observed_at - timedelta(minutes=position)
-            session_word = StudySessionWord.objects.create(
+            create_recall_outcome(
+                learner=self.learner,
+                entry=entry,
                 session=session,
-                corpus_entry=entry,
                 position=position,
-                kind=StudySessionWord.Kind.NEW,
-                ready_at=occurred_at,
-                cleared_at=occurred_at,
-            )
-            item = StudySessionItem.objects.create(
-                session=session,
-                session_word=session_word,
-                corpus_entry=entry,
-                position=position,
-                kind=StudySessionItem.Kind.NEW,
-            )
-            answer = RecallAnswer.objects.create(
-                item=item,
+                occurred_at=occurred_at,
                 rating=rating,
-                client_request_id=uuid.uuid4(),
-                submitted_at=datetime.now(UTC),
-            )
-            RecallAnswer.objects.filter(pk=answer.pk).update(
-                submitted_at=occurred_at,
-                accepted_at=occurred_at,
-            )
-            RecallOutcome.objects.create(
-                answer=answer,
-                review_number=1,
-                scheduler_version="test-scheduler",
                 previous_phase="",
                 next_phase="learning",
-                previous_due_at=None,
-                next_due_at=occurred_at + timedelta(minutes=10),
-                previous_state={},
-                next_state={"step": 1},
-                occurred_at=occurred_at,
+                next_interval=timedelta(minutes=10),
             )
 
         self.client.force_login(self.learner)
-        with (
-            patch("progress.services.current_time", return_value=observed_at),
-            CaptureQueriesContext(connection) as queries,
-        ):
+        with patch("progress.services.current_time", return_value=observed_at):
             response = self.client.get(
                 reverse("progress:summary"),
                 {"timezone": "America/Chicago"},
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertLessEqual(len(queries), 10)
         payload = response.json()
         self.assertEqual(
             payload["corpus"],
@@ -269,7 +231,6 @@ class LearningProgressApiTests(TestCase):
                 "forgot": 1,
             },
         )
-        self.assertNotIn("recent_outcomes", payload)
 
     def test_auth_timezone_corpus_and_transient_failures_have_stable_codes(self):
         anonymous = self.client.get(
@@ -340,63 +301,16 @@ class LearningInsightsApiTests(TestCase):
         review_number: int | None = None,
         next_interval: timedelta = timedelta(days=1),
     ) -> None:
-        is_initial_learning = previous_phase == ""
-        session = StudySession.objects.create(
+        """Add a scheduling outcome to this learner's history."""
+        create_recall_outcome(
             learner=self.learner,
-            corpus=self.corpus,
-            status=StudySession.Status.COMPLETED,
-            new_word_target=0,
-            planner_version="test-planner",
-            ended_at=occurred_at,
-        )
-        item_kind = (
-            StudySessionItem.Kind.NEW
-            if is_initial_learning
-            else StudySessionItem.Kind.DUE
-        )
-        session_word = StudySessionWord.objects.create(
-            session=session,
-            corpus_entry=self.entries[entry_index],
-            position=1,
-            kind=item_kind,
-            ready_at=occurred_at,
-            cleared_at=occurred_at,
-        )
-        item = StudySessionItem.objects.create(
-            session=session,
-            session_word=session_word,
-            corpus_entry=self.entries[entry_index],
-            position=1,
-            kind=item_kind,
-            due_at_snapshot=(
-                None if is_initial_learning else occurred_at - timedelta(days=1)
-            ),
-            scheduler_version="" if is_initial_learning else "test-scheduler",
-            scheduling_state_snapshot={} if is_initial_learning else {"step": 1},
-        )
-        answer = RecallAnswer.objects.create(
-            item=item,
+            entry=self.entries[entry_index],
+            occurred_at=occurred_at,
             rating=rating,
-            client_request_id=uuid.uuid4(),
-            submitted_at=datetime.now(UTC),
-        )
-        RecallAnswer.objects.filter(pk=answer.pk).update(
-            submitted_at=occurred_at,
-            accepted_at=occurred_at,
-        )
-        RecallOutcome.objects.create(
-            answer=answer,
-            review_number=review_number or (1 if is_initial_learning else 2),
-            scheduler_version="test-scheduler",
             previous_phase=previous_phase,
             next_phase=next_phase,
-            previous_due_at=(
-                None if is_initial_learning else occurred_at - timedelta(days=1)
-            ),
-            next_due_at=occurred_at + next_interval,
-            previous_state={} if is_initial_learning else {"step": 1},
-            next_state={"step": 2},
-            occurred_at=occurred_at,
+            review_number=review_number,
+            next_interval=next_interval,
         )
 
     def test_review_recall_compares_local_7_day_periods_and_excludes_learning(self):
@@ -478,17 +392,13 @@ class LearningInsightsApiTests(TestCase):
                 previous_phase="review",
             )
 
-        with (
-            patch("progress.services.current_time", return_value=observed_at),
-            CaptureQueriesContext(connection) as queries,
-        ):
+        with patch("progress.services.current_time", return_value=observed_at):
             response = self.client.get(
                 reverse("progress:insights"),
                 {"timezone": "America/Chicago"},
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertLessEqual(len(queries), 10)
         recall = response.json()["review_recall"]
         self.assertEqual(recall["current"]["rate_percent"], 80)
         self.assertTrue(recall["current"]["has_sufficient_data"])

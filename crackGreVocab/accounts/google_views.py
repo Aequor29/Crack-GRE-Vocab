@@ -2,6 +2,7 @@
 
 from urllib.parse import urlencode
 
+from api.schema import CSRF_HEADER_PARAMETER
 from authlib.integrations.base_client import OAuthError
 from django.conf import settings
 from django.contrib.auth import login
@@ -40,7 +41,7 @@ from .serializers import (
     GoogleLinkConfirmSerializer,
     LearnerAccountSerializer,
 )
-from .views import CSRF_HEADER_PARAMETER, AccountApiView
+from .views import AccountApiView
 
 PENDING_GOOGLE_LINK_SESSION_KEY = "pending_google_link"
 
@@ -117,7 +118,7 @@ class GoogleSignInStartView(View):
 
 
 class GoogleSignInCallbackView(View):
-    """Accept verified Google claims without persisting provider credentials."""
+    """Establish a learner session from verified Google claims."""
 
     http_method_names = ["get"]
 
@@ -217,7 +218,7 @@ class GoogleLinkConfirmView(AccountApiView):
 
 
 class GoogleLinkCancelView(AccountApiView):
-    """Discard one pending Google link without changing account data."""
+    """Discard the pending Google account link."""
 
     permission_classes = (AllowAny,)
     http_method_names = ["post", "options"]
@@ -229,6 +230,6 @@ class GoogleLinkCancelView(AccountApiView):
         responses={204: None, 403: ApiMessageSerializer},
     )
     def post(self, request: Request) -> Response:
-        """Cancel the pending link without touching either identity."""
+        """Cancel the pending Google account link."""
         _clear_pending_google_link(request._request)
         return Response(status=HTTP_204_NO_CONTENT)

@@ -9,7 +9,7 @@ from .models import LearnerAccount
 
 @admin.register(LearnerAccount)
 class LearnerAccountAdmin(UserAdmin):
-    """Expose only clean-rebuild learner identity fields in admin."""
+    """Manage learner identities in the admin interface."""
 
     add_form = LearnerAccountCreationForm
     form = LearnerAccountChangeForm

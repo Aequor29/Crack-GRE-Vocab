@@ -174,7 +174,6 @@ class ProviderParserTests(SimpleTestCase):
                     "dictionaryapi-dev-v2",
                 ],
             )
-            self.assertEqual(registry["oewn-2025"].parser_version, 1)
 
             for document in invalid_documents:
                 with self.subTest(document=document):

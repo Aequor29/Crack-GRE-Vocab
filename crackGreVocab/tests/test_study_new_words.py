@@ -82,7 +82,6 @@ class StableLearnerDeckTests(TestCase):
 
     def test_existing_session_keeps_its_policy_and_positions_on_resume(self):
         session = plan_study_session(learner=self.learner, new_word_target=5).session
-        # Model a queue persisted by a previous planner, with its own order.
         session.planner_version = "m1-daily-queue-v1"
         session.save(update_fields=("planner_version",))
         before = tuple(session.session_words.values_list("corpus_entry_id", flat=True))

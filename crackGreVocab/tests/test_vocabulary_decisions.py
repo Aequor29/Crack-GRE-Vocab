@@ -1,4 +1,4 @@
-"""Reviewed-content schema tests at the decision-module interface."""
+"""Reviewed vocabulary content and provider selections."""
 
 import json
 import tempfile
@@ -17,12 +17,12 @@ class VocabularyDecisionTests(SimpleTestCase):
         path.write_text(json.dumps(document), encoding="utf-8")
         return path
 
-    def test_provider_selection_keeps_only_candidate_identity_and_review_note(self):
+    def test_provider_selection_preserves_the_review_note_and_chosen_example(self):
         document = {
             "schema_version": 4,
             "selections": {
                 "lucid": {
-                    "review_note": "The alternate legacy gloss was too broad.",
+                    "review_note": "Use the sense about clear explanations.",
                     "senses": [
                         {
                             "candidate_sha256": "1" * 64,
@@ -47,24 +47,23 @@ class VocabularyDecisionTests(SimpleTestCase):
         decision = decisions["lucid"]
         self.assertEqual(
             decision.review_note,
-            "The alternate legacy gloss was too broad.",
+            "Use the sense about clear explanations.",
         )
         self.assertEqual(decision.senses[0].example_index, 1)
 
-    def test_legacy_hint_disposition_fields_are_not_part_of_the_schema(self):
+    def test_provider_selection_rejects_malformed_review_content(self):
         document = {
             "schema_version": 4,
             "selections": {
                 "lucid": {
-                    "rejected_source_hints": [],
-                    "senses": [],
+                    "senses": "invalid",
                 }
             },
             "source_sha256": self.source_digest,
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = self._write(Path(temporary_directory), "senses.json", document)
-            with self.assertRaisesRegex(CorpusBuildError, "invalid fields"):
+            with self.assertRaises(CorpusBuildError):
                 load_sense_decisions(path, source_digest=self.source_digest)
 
     def test_editorial_override_loads_paired_learning_content(self):

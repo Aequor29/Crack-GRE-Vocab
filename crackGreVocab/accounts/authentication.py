@@ -6,7 +6,7 @@ from rest_framework.request import Request
 
 
 class CsrfRejected(PermissionDenied):
-    """Identify CSRF rejection without exposing framework prose as a contract."""
+    """Represent a rejected CSRF check with a stable error code."""
 
     default_detail = "CSRF validation failed."
     default_code = "csrf_failed"
