@@ -140,7 +140,10 @@ class RecallAnswerApiTests(TestCase):
             )
 
         self.assertEqual(first.status_code, 201)
-        self.assertEqual(first.json()["session"]["current_item"]["term"], "lucid")
+        self.assertEqual(
+            first.json()["session"]["current_item"]["term"],
+            second_item.corpus_entry.term,
+        )
         self.assertEqual(second.status_code, 201)
         self.assertEqual(second.json()["session"]["status"], "active")
         self.assertEqual(second.json()["session"]["queue_state"], "waiting")
@@ -191,7 +194,9 @@ class RecallAnswerApiTests(TestCase):
         ):
             resumed = self.client.get(reverse("study:active-session"))
         issued_item_id = resumed.json()["current_item"]["id"]
-        self.assertEqual(resumed.json()["current_item"]["term"], "lucid")
+        self.assertEqual(
+            resumed.json()["current_item"]["term"], second_item.corpus_entry.term
+        )
 
         with patch(
             "study.services.timezone.now",
@@ -260,7 +265,9 @@ class RecallAnswerApiTests(TestCase):
         ):
             fair_next = self.client.get(reverse("study:active-session"))
 
-        self.assertEqual(fair_next.json()["current_item"]["term"], "abate")
+        self.assertEqual(
+            fair_next.json()["current_item"]["term"], first_item.corpus_entry.term
+        )
 
     def test_validation_csrf_order_and_ownership_fail_safely(self):
         session = plan_study_session(
