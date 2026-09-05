@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from accounts.models import LearnerAccount
-from django.db.models import Count, F, Min, Q, QuerySet
+from django.db.models import Count, F, Q, QuerySet
 from vocabulary.models import CorpusEntry, CorpusVersion
 
 from .models import LearnerWordState, RecallAnswer, StudySession, StudySessionItem
@@ -31,10 +31,6 @@ def study_session_queryset() -> QuerySet[StudySession]:
             cleared_word_count_value=Count(
                 "session_words",
                 filter=Q(session_words__cleared_at__isnull=False),
-            ),
-            next_ready_at_value=Min(
-                "session_words__ready_at",
-                filter=Q(session_words__cleared_at__isnull=True),
             ),
         )
     )
@@ -78,19 +74,17 @@ def has_uncleared_session_words(*, session: StudySession) -> bool:
     return session.session_words.filter(cleared_at__isnull=True).exists()
 
 
-def select_ready_session_item(
+def select_next_session_item(
     *,
     session: StudySession,
-    observed_at: datetime,
 ) -> StudySessionItem | None:
-    """Return the fairest ready presentation attempt for an idle session."""
+    """Rotate through unfinished Words without gating on scheduled review time."""
     return (
         StudySessionItem.objects.select_related("corpus_entry__word", "session_word")
         .filter(
             session=session,
             session_word__is_in_active_window=True,
             answer__isnull=True,
-            ready_at__lte=observed_at,
         )
         .order_by(
             F("session_word__last_presented_position").asc(nulls_first=True),

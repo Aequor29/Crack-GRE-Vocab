@@ -6,7 +6,7 @@ data-migration path.
 
 ## Milestone 1 daily queue policy
 
-`m1-daily-queue-stable-deck-v2` produces one fixed daily set and a bounded working window:
+`m1-continuous-queue-stable-deck-v3` produces one fixed daily set and a bounded working window:
 
 1. Return the learner's existing active session, if one exists.
 2. Store the next local midnight as a stable UTC completion cutoff using the
@@ -17,18 +17,21 @@ data-migration path.
 4. Activate at most 30 session Words at once. Ready work takes priority and the
    window refills without creating another learner-visible session.
 5. Persist unique Word membership separately from presentation attempts so a
-   Learning or Relearning Word can return after its timer elapses.
+   Learning or Relearning Word can return during the same sitting.
 
-Review-phase work due later in the local day is ready immediately. Learning and
-Relearning timers retain their actual minute-based readiness. Among ready Words,
-the queue chooses the least recently presented Word and uses stable initial
-position to break ties.
+Every unfinished session Word is eligible immediately. The queue chooses the
+least recently presented Word and uses stable initial position to break ties.
+Scheduling timestamps still inform the working-window refill order and are
+stored with each attempt, but they never prevent the learner from continuing.
+An accepted answer that remains due today creates another attempt; an answer
+scheduled at or beyond the session's day boundary clears the Word. The scheduler
+receives the real answer time, including when the learner reviews early.
 
 Progress is the number of unique session Words whose authoritative next review
 is at or beyond the stored cutoff. Repeated attempts do not increase that count,
 and the session completes only when every assigned Word is cleared for the day.
 The API derives counts with database aggregates and returns only the issued card,
-progress, waiting state, and next-ready time; it never resends attempt history.
+progress and queue state; it never resends attempt history.
 
 A Word is unseen when the learner has no scheduling state for its stable Word
 identity. An abandoned, unanswered new membership remains eligible because

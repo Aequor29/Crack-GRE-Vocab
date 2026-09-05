@@ -39,7 +39,6 @@ class StudyOpenApiTests(SimpleTestCase):
             {
                 "cleared_word_count",
                 "current_item",
-                "next_ready_at",
                 "queue_state",
                 "remaining_word_count",
                 "word_count",
